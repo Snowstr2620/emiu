@@ -1,10 +1,16 @@
+// @vitest-environment node
+import { NextResponse } from 'next/server';
 import { describe, expect, test } from 'vitest';
 import {
   ADMIN_COOKIE_NAME,
+  clearViewerCookiesOnResponse,
   createAdminSessionToken,
   createViewerSessionToken,
   GUEST_COOLDOWN_COOKIE_NAME,
   hashPasscode,
+  resolveAdminSession,
+  resolveViewerSession,
+  sanitizeUserForClient,
   signSessionPayload,
   summarizeUserAgent,
   verifyAdminSessionToken,
@@ -485,6 +491,161 @@ describe('multi-account session payloads, repo verification & UA summary', () =>
     expect(summarizeUserAgent('')).toBe('Không rõ thiết bị');
     expect(summarizeUserAgent('X'.repeat(200)).length).toBeLessThanOrEqual(48);
   });
+
+  test('sanitizeUserForClient strips sensitive hashes and clearViewerCookiesOnResponse clears viewer cookies', () => {
+    const safe = sanitizeUserForClient(activeAdmin);
+    expect('passwordHash' in safe).toBe(false);
+    expect('otpHash' in safe).toBe(false);
+    expect(safe).toMatchObject({
+      id: activeAdmin.id,
+      username: 'admin',
+      displayName: activeAdmin.displayName,
+      role: 'admin',
+      hasPassword: true,
+      hasOtp: true,
+    });
+
+    const response = NextResponse.json({ ok: true });
+    clearViewerCookiesOnResponse(response);
+    expect(response.cookies.get(VIEWER_STEP1_COOKIE_NAME)?.value).toBe('');
+    expect(response.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.value).toBe('');
+  });
+
+  test('verifySessionPayload rejects array payloads, empty usr, ver < 1, and admin token with viewer role', () => {
+    const arrayToken = signSessionPayload([] as unknown as { typ: string; exp: number }, 3600);
+    expect(verifySessionPayload<UserSessionTokenPayload>(arrayToken, 'viewer_unlocked')).toBeNull();
+
+    const emptyUsrToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'viewer_unlocked',
+        sub: activeViewer.id,
+        usr: '',
+        ver: 1,
+        role: 'viewer',
+        exp: 0,
+      },
+      3600
+    );
+    expect(verifySessionPayload<UserSessionTokenPayload>(emptyUsrToken, 'viewer_unlocked')).toBeNull();
+
+    const zeroVerToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'viewer_unlocked',
+        sub: activeViewer.id,
+        usr: 'nguoithuong',
+        ver: 0,
+        role: 'viewer',
+        exp: 0,
+      },
+      3600
+    );
+    expect(verifySessionPayload<UserSessionTokenPayload>(zeroVerToken, 'viewer_unlocked')).toBeNull();
+
+    const adminWithViewerRole = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'admin',
+        sub: activeAdmin.id,
+        usr: 'admin',
+        ver: 1,
+        role: 'viewer',
+        exp: 0,
+      },
+      3600
+    );
+    expect(verifySessionPayload<UserSessionTokenPayload>(adminWithViewerRole, 'admin')).toBeNull();
+  });
+
+  test('resolveAdminSession and resolveViewerSession handle unlocked, otp_pending, and login_required states', async () => {
+    const users = [activeAdmin, activeViewer];
+    const repo = makeMockRepo(users);
+
+    const adminToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'admin',
+        sub: activeAdmin.id,
+        usr: activeAdmin.username,
+        ver: activeAdmin.sessionVersion,
+        role: 'admin',
+        exp: 0,
+      },
+      3600
+    );
+    const step1Token = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'viewer_step1',
+        sub: activeViewer.id,
+        usr: activeViewer.username,
+        ver: activeViewer.sessionVersion,
+        role: 'viewer',
+        exp: 0,
+      },
+      600
+    );
+    const unlockedToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'viewer_unlocked',
+        sub: activeViewer.id,
+        usr: activeViewer.username,
+        ver: activeViewer.sessionVersion,
+        role: 'viewer',
+        exp: 0,
+      },
+      3600
+    );
+
+    const adminSession = await resolveAdminSession(
+      repo,
+      new Request('http://localhost/admin', {
+        headers: { cookie: `${ADMIN_COOKIE_NAME}=${adminToken}` },
+      })
+    );
+    expect(adminSession?.username).toBe('admin');
+    expect(adminSession && 'passwordHash' in adminSession).toBe(false);
+
+    const unlockedState = await resolveViewerSession(
+      repo,
+      new Request('http://localhost/', {
+        headers: {
+          cookie: `${VIEWER_UNLOCKED_COOKIE_NAME}=${unlockedToken}; ${VIEWER_STEP1_COOKIE_NAME}=${step1Token}`,
+        },
+      })
+    );
+    expect(unlockedState).toMatchObject({
+      stage: 'unlocked',
+      user: { username: 'nguoithuong' },
+    });
+
+    const pendingState = await resolveViewerSession(
+      repo,
+      new Request('http://localhost/', {
+        headers: { cookie: `${VIEWER_STEP1_COOKIE_NAME}=${step1Token}` },
+      })
+    );
+    expect(pendingState).toMatchObject({
+      stage: 'otp_pending',
+      user: { username: 'nguoithuong' },
+      otpHint: '14/02',
+    });
+
+    // Simulate session revocation and lock -> falls back to login_required
+    const revokedRepo = makeMockRepo([{ ...activeViewer, sessionVersion: 99 }]);
+    const afterRevoke = await resolveViewerSession(
+      revokedRepo,
+      new Request('http://localhost/', {
+        headers: { cookie: `${VIEWER_UNLOCKED_COOKIE_NAME}=${unlockedToken}` },
+      })
+    );
+    expect(afterRevoke).toEqual({ stage: 'login_required', user: null });
+
+    const lockedRepo = makeMockRepo([{ ...activeViewer, isActive: false }]);
+    const afterLock = await resolveViewerSession(
+      lockedRepo,
+      new Request('http://localhost/', {
+        headers: { cookie: `${VIEWER_STEP1_COOKIE_NAME}=${step1Token}` },
+      })
+    );
+    expect(afterLock).toEqual({ stage: 'login_required', user: null });
+  });
 });
 
 describe('multi-account & activity payload validation', () => {
@@ -504,6 +665,13 @@ describe('multi-account & activity payload validation', () => {
       true
     );
     expect('error' in validateUserLoginPayload({ username: 'admin', password: '123' })).toBe(true);
+    expect('error' in validateUserLoginPayload({ username: 'admin', password: '      ' })).toBe(
+      true
+    );
+    expect(
+      'error' in
+        validateUserLoginPayload({ username: 123, password: 'secret' }, { defaultUsername: 'admin' })
+    ).toBe(true);
   });
 
   test('validates 6-digit OTP payload', () => {
@@ -581,6 +749,50 @@ describe('multi-account & activity payload validation', () => {
     ).toBe(true);
 
     expect(
+      'error' in
+        validateCreateUserPayload({
+          username: 'emyeu',
+          displayName: 'Em',
+          role: 'viewer',
+          password: '        ',
+          otpCode: '121024',
+        })
+    ).toBe(true);
+
+    expect(
+      'error' in
+        validateCreateUserPayload({
+          username: 'emyeu',
+          displayName: 'Em',
+          role: 'viewer',
+          password: 'password123',
+          otpCode: '121024',
+          isActive: 'false',
+        })
+    ).toBe(true);
+
+    expect(
+      validateCreateUserPayload({
+        username: 'emyeu',
+        displayName: 'Em',
+        role: 'viewer',
+        password: 'password123',
+        otpCode: '121024',
+        isActive: false,
+      })
+    ).toEqual({
+      data: {
+        username: 'emyeu',
+        displayName: 'Em',
+        role: 'viewer',
+        password: 'password123',
+        otpCode: '121024',
+        otpHint: '',
+        isActive: false,
+      },
+    });
+
+    expect(
       validateUpdateUserPayload({
         displayName: 'Thương em',
         password: '',
@@ -595,6 +807,7 @@ describe('multi-account & activity payload validation', () => {
     });
 
     expect('error' in validateUpdateUserPayload({ password: '123' })).toBe(true);
+    expect('error' in validateUpdateUserPayload({ password: '      ' })).toBe(true);
     expect('error' in validateUpdateUserPayload({ otpCode: 'abc' })).toBe(true);
   });
 
@@ -634,6 +847,20 @@ describe('multi-account & activity payload validation', () => {
       'unknown',
     ]) {
       expect('error' in validateClientActivityPayload({ eventType: forbidden })).toBe(true);
+    }
+
+    const protoPayload = JSON.parse(
+      '{"eventType":"memory_viewed","metadata":{"__proto__":"bad","constructor":"bad","prototype":"bad","safeKey":"ok"}}'
+    );
+    const sanitized = validateClientActivityPayload(protoPayload);
+    expect('data' in sanitized).toBe(true);
+    if ('data' in sanitized) {
+      expect(sanitized.data.metadata).toEqual({ safeKey: 'ok' });
+      expect(Object.prototype.hasOwnProperty.call(sanitized.data.metadata, '__proto__')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(sanitized.data.metadata, 'constructor')).toBe(
+        false
+      );
+      expect(Object.prototype.hasOwnProperty.call(sanitized.data.metadata, 'prototype')).toBe(false);
     }
   });
 

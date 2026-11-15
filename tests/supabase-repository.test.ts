@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { verifyPasscode } from '@/lib/auth';
 import { SupabaseStorageRepository } from '@/lib/storage/supabase-repository';
 import { createInitialSeedData } from '@/lib/seed-data';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function createMockSupabaseClient(options?: {
   initialSettingsRow?: Record<string, unknown> | null;
@@ -102,10 +105,25 @@ function createMockSupabaseClient(options?: {
         return builder;
       },
       limit(count: number) {
+        if (!Number.isFinite(count)) {
+          throw new Error(`Invalid non-finite limit passed to Supabase query: ${count}`);
+        }
         limitCount = count;
         return builder;
       },
-      maybeSingle: async () => ({ data: execute()[0] ?? null, error: null }),
+      maybeSingle: async () => {
+        const idFilter = filters.find((f) => f.col === 'id' && typeof f.val === 'string');
+        if (idFilter && !UUID_PATTERN.test(String(idFilter.val))) {
+          return {
+            data: null,
+            error: {
+              code: '22P02',
+              message: `invalid input syntax for type uuid: "${idFilter.val}"`,
+            },
+          };
+        }
+        return { data: execute()[0] ?? null, error: null };
+      },
       returns: async () => ({ data: execute(), error: null }),
       then(resolve: (value: { data: Record<string, unknown>[]; error: null }) => void) {
         resolve({ data: execute(), error: null });
@@ -139,14 +157,23 @@ function createMockSupabaseClient(options?: {
             };
           },
           update(patch: Record<string, unknown>) {
-            return {
-              eq: async () => {
-                if (settingsRow) {
+            const filters: Array<{ col: string; val: unknown }> = [];
+            const updateBuilder = {
+              eq(col: string, val: unknown) {
+                filters.push({ col, val });
+                return updateBuilder;
+              },
+              then(resolve: (res: { error: null }) => void) {
+                if (
+                  settingsRow &&
+                  filters.every((f) => settingsRow![f.col] === f.val)
+                ) {
                   settingsRow = { ...settingsRow, ...patch };
                 }
-                return { error: null };
+                resolve({ error: null });
               },
             };
+            return updateBuilder;
           },
         };
       }
@@ -440,7 +467,27 @@ describe('SupabaseStorageRepository', () => {
     await expect(repo.updateUser(onlyAdmin.id, { isActive: false })).rejects.toThrow(
       /quản trị hoạt động cuối cùng/
     );
+    await expect(repo.updateUser(onlyAdmin.id, { role: 'viewer' })).rejects.toThrow(
+      /quản trị hoạt động cuối cùng/
+    );
     await expect(repo.deleteUser(onlyAdmin.id)).rejects.toThrow(/quản trị hoạt động cuối cùng/);
+
+    // Non-UUID getUserById returns null instead of crashing with Postgres 22P02
+    expect(await repo.getUserById('not-a-uuid')).toBeNull();
+
+    // Inactive second admin must not allow locking/deleting the sole active admin
+    await repo.createUser({
+      username: 'inactive.admin',
+      displayName: 'Admin khóa',
+      role: 'admin',
+      password: 'password123',
+      otpCode: '111222',
+      otpHint: '',
+      isActive: false,
+    });
+    await expect(repo.updateUser(onlyAdmin.id, { isActive: false })).rejects.toThrow(
+      /quản trị hoạt động cuối cùng/
+    );
 
     const created = await repo.createUser({
       username: 'ban.nho',
@@ -456,10 +503,30 @@ describe('SupabaseStorageRepository', () => {
     const updated = await repo.updateUser(created.id, { revokeSession: true });
     expect(updated?.sessionVersion).toBe(2);
 
+    const pwUpdated = await repo.updateUser(created.id, { password: 'newpassword123' });
+    expect(pwUpdated?.sessionVersion).toBe(3);
+    expect(verifyPasscode('newpassword123', (await repo.getUserById(created.id))!.passwordHash)).toBe(
+      true
+    );
+
+    const otpUpdated = await repo.updateUser(created.id, { otpCode: '654321' });
+    expect(otpUpdated?.sessionVersion).toBe(4);
+    expect(verifyPasscode('654321', (await repo.getUserById(created.id))!.otpHash)).toBe(true);
+
+    const lockedViewer = await repo.updateUser(created.id, { isActive: false });
+    expect(lockedViewer?.isActive).toBe(false);
+    expect(lockedViewer?.sessionVersion).toBe(5);
+
+    await repo.recordUserLoginSuccess(created.id);
+    expect((await repo.getUserById(created.id))?.lastLoginAt).toBeTruthy();
+
+    expect(await repo.deleteUser(created.id)).toBe(true);
+    expect(await repo.getUserById(created.id)).toBeNull();
+
     await repo.recordActivity({
-      userId: created.id,
-      username: created.username,
-      userRole: 'viewer',
+      userId: null,
+      username: 'khach',
+      userRole: 'guest',
       eventType: 'memory_viewed',
       detail: 'Xem kỷ niệm đầu tiên',
       deviceSummary: 'Safari · iPhone',
@@ -468,7 +535,59 @@ describe('SupabaseStorageRepository', () => {
 
     const logs = await repo.listActivityLogs({ eventType: 'memory_viewed', search: 'đầu tiên' });
     expect(logs).toHaveLength(1);
-    expect(logs[0].username).toBe('ban.nho');
+    expect(logs[0].username).toBe('khach');
+
+    // NaN limit falls back safely to 100 without passing NaN to Supabase .limit()
+    const nanLogs = await repo.listActivityLogs({ limit: Number.NaN });
+    expect(nanLogs).toHaveLength(1);
+  });
+
+  test('upgrades Phase 1 site_settings once even when getUserByUsername runs before getPublicData, and preserves subsequent false', async () => {
+    const mock = createMockSupabaseClient({
+      initialSettingsRow: {
+        id: 1,
+        couple_title: 'Minh & Lan',
+        hero_subtitle: 'Subtitle cũ',
+        love_start_date: '2024-10-12',
+        music_url: '/samples/gentle-memories.wav',
+        music_enabled: true,
+        letter_title: 'Gửi em',
+        letter_body: 'Nội dung thư.',
+        letter_signature: 'Minh',
+        viewer_passcode_enabled: false,
+        viewer_passcode_hash: '',
+        updated_at: '2026-11-15T00:00:00.000Z',
+      },
+      initialUserRows: [],
+    });
+    const repo = new SupabaseStorageRepository({
+      client: mock.client,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+
+    // Trigger user seeding BEFORE getPublicData()
+    const seededAdmin = await repo.getUserByUsername('admin');
+    expect(seededAdmin?.username).toBe('admin');
+
+    const pub = await repo.getPublicData();
+    expect(pub.settings.viewerPasscodeEnabled).toBe(true);
+    expect(pub.settings.coupleTitle).toBe('Minh & Lan');
+
+    // Subsequent explicit disable must remain false
+    await repo.updateSettings({
+      coupleTitle: 'Minh & Lan',
+      heroSubtitle: 'Subtitle cũ',
+      loveStartDate: '2024-10-12',
+      musicUrl: '/samples/gentle-memories.wav',
+      musicEnabled: true,
+      letterTitle: 'Gửi em',
+      letterBody: 'Nội dung thư.',
+      letterSignature: 'Minh',
+      viewerPasscodeEnabled: false,
+    });
+    const pubAfter = await repo.getPublicData();
+    expect(pubAfter.settings.viewerPasscodeEnabled).toBe(false);
   });
 
   test('protects /samples/ URLs and strips bucket path cleanly when deleting stored Supabase media', async () => {

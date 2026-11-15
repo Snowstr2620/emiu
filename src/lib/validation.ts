@@ -253,6 +253,9 @@ export function validateUserLoginPayload(
   }
 
   const r = raw as Record<string, unknown>;
+  if (r.username !== undefined && typeof r.username !== 'string') {
+    return { error: 'Tên đăng nhập không hợp lệ.' };
+  }
   const rawUsername = typeof r.username === 'string' ? r.username.trim().toLowerCase() : '';
   const username =
     !rawUsername && options?.defaultUsername
@@ -313,7 +316,10 @@ export function validateCreateUserPayload(
   const password = typeof r.password === 'string' ? r.password : '';
   const otpCode = typeof r.otpCode === 'string' ? r.otpCode.trim() : '';
   const otpHint = typeof r.otpHint === 'string' ? r.otpHint.trim() : '';
-  const isActive = typeof r.isActive === 'boolean' ? r.isActive : true;
+  if (r.isActive !== undefined && typeof r.isActive !== 'boolean') {
+    return { error: 'Trạng thái hoạt động không hợp lệ.' };
+  }
+  const isActive = r.isActive ?? true;
 
   if (!USERNAME_REGEX.test(username)) {
     return { error: 'Tên đăng nhập gồm 3–32 ký tự chữ thường, số hoặc dấu . _ -.' };
@@ -454,6 +460,8 @@ export interface ValidatedClientActivityPayload {
   metadata: Record<string, string | number | boolean> | null;
 }
 
+const FORBIDDEN_METADATA_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export function validateClientActivityPayload(
   raw: unknown
 ): { data: ValidatedClientActivityPayload } | { error: string } {
@@ -476,7 +484,7 @@ export function validateClientActivityPayload(
     for (const [rawKey, rawVal] of Object.entries(r.metadata)) {
       if (count >= 6) break;
       const key = rawKey.trim().slice(0, 40);
-      if (!key) continue;
+      if (!key || FORBIDDEN_METADATA_KEYS.has(key)) continue;
 
       if (typeof rawVal === 'string') {
         clean[key] = rawVal.trim().slice(0, 80);

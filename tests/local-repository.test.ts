@@ -339,17 +339,49 @@ describe('LocalStorageRepository', () => {
     expect(renamedViewer?.displayName).toBe('Công chúa nhỏ');
     expect(renamedViewer?.sessionVersion).toBe(1);
 
-    // Changing password / OTP / revoking session / locking increments sessionVersion
+    // Changing password / OTP / role / revoking session / locking increments sessionVersion
     const revokedViewer = await repo.updateUser(viewerUser.id, { revokeSession: true });
     expect(revokedViewer?.sessionVersion).toBe(2);
 
+    const passwordChangedViewer = await repo.updateUser(viewerUser.id, {
+      password: 'newpassword123',
+    });
+    expect(passwordChangedViewer?.sessionVersion).toBe(3);
+    expect(
+      verifyPasscode('newpassword123', (await repo.getUserById(viewerUser.id))!.passwordHash)
+    ).toBe(true);
+
     const otpChangedViewer = await repo.updateUser(viewerUser.id, { otpCode: '654321' });
-    expect(otpChangedViewer?.sessionVersion).toBe(3);
+    expect(otpChangedViewer?.sessionVersion).toBe(4);
     const rawViewer = await repo.getUserById(viewerUser.id);
     expect(verifyPasscode('654321', rawViewer!.otpHash)).toBe(true);
 
+    const promotedViewer = await repo.updateUser(viewerUser.id, { role: 'admin' });
+    expect(promotedViewer?.sessionVersion).toBe(5);
+    expect(promotedViewer?.role).toBe('admin');
+
+    // Demote back to viewer (adminUser is active so this succeeds, bumping version again)
+    const demotedViewer = await repo.updateUser(viewerUser.id, { role: 'viewer' });
+    expect(demotedViewer?.sessionVersion).toBe(6);
+
     await repo.recordUserLoginSuccess(viewerUser.id);
     expect((await repo.getUserById(viewerUser.id))?.lastLoginAt).toBeTruthy();
+
+    // An INACTIVE second admin must NOT allow locking or deleting the sole active admin
+    const inactiveAdmin = await repo.createUser({
+      username: 'inactive.admin',
+      displayName: 'Admin tạm khoá',
+      role: 'admin',
+      password: 'password123',
+      otpCode: '111222',
+      otpHint: '',
+      isActive: false,
+    });
+    expect(inactiveAdmin.isActive).toBe(false);
+    await expect(repo.updateUser(adminUser.id, { isActive: false })).rejects.toThrow(
+      /quản trị hoạt động cuối cùng/
+    );
+    await expect(repo.deleteUser(adminUser.id)).rejects.toThrow(/quản trị hoạt động cuối cùng/);
 
     // Create second active admin -> now locking/deleting the first admin succeeds
     const secondAdmin = await repo.createUser({
@@ -400,6 +432,10 @@ describe('LocalStorageRepository', () => {
     const filteredByUser = await repo.listActivityLogs({ username: 'khach', limit: 10 });
     expect(filteredByUser).toHaveLength(10);
     expect(filteredByUser.every((l) => l.username === 'khach')).toBe(true);
+
+    // Non-finite / NaN limit falls back safely to default (100) instead of returning []
+    const nanLimitLogs = await repo.listActivityLogs({ limit: Number.NaN });
+    expect(nanLimitLogs).toHaveLength(100);
 
     // Vietnam calendar day test (UTC+7):
     // Reference now: 2026-11-15T01:00:00+07:00 = 2026-11-14T18:00:00Z

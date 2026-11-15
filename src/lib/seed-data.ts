@@ -75,7 +75,7 @@ export function buildInitialUsers(now: string = new Date().toISOString()): AppUs
 
 export const buildDefaultUsers = buildInitialUsers;
 
-function createSeedSettingsAndMemories(now: string): {
+export function createSeedSettingsAndMemories(now: string = new Date().toISOString()): {
   settings: SiteSettings;
   memories: MemoryItem[];
 } {
@@ -311,6 +311,12 @@ export function shouldBumpSessionVersion(
   );
 }
 
+export function normalizeActivityLimit(limit?: number): number {
+  const rawLimit =
+    typeof limit === 'number' && Number.isFinite(limit) ? Math.floor(limit) : 100;
+  return Math.min(Math.max(rawLimit, 1), 500);
+}
+
 export function filterActivityLogs(
   logs: ActivityLogItem[],
   filters?: ListActivityLogsFilter
@@ -319,7 +325,7 @@ export function filterActivityLogs(
   const searchTerm = filters?.search?.trim().toLowerCase();
   const eventTypeFilter =
     filters?.eventType && filters.eventType !== 'all' ? filters.eventType : null;
-  const limit = Math.min(Math.max(filters?.limit ?? 100, 1), 500);
+  const limit = normalizeActivityLimit(filters?.limit);
 
   const filtered = logs.filter((log) => {
     if (eventTypeFilter && log.eventType !== eventTypeFilter) {

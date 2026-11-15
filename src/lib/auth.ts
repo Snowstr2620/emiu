@@ -163,7 +163,7 @@ export function verifySessionPayload<T extends { typ: string; exp: number }>(
     return null;
   }
 
-  if (!decoded || typeof decoded !== 'object') return null;
+  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return null;
   const record = decoded as Record<string, unknown>;
 
   // Strictly enforce token stage type to prevent cross-stage token confusion.
@@ -182,10 +182,16 @@ export function verifySessionPayload<T extends { typ: string; exp: number }>(
     typeof record.sub !== 'string' ||
     !record.sub ||
     typeof record.usr !== 'string' ||
+    !record.usr ||
     typeof record.ver !== 'number' ||
     !Number.isInteger(record.ver) ||
+    record.ver < 1 ||
     (record.role !== 'admin' && record.role !== 'viewer')
   ) {
+    return null;
+  }
+
+  if (expectedTyp === 'admin' && record.role !== 'admin') {
     return null;
   }
 

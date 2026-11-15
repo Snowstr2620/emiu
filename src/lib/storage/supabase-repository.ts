@@ -5,8 +5,9 @@ import {
   assertCanModifyActiveAdmin,
   buildInitialUsers,
   computeTrafficSummary,
-  createInitialSeedData,
+  createSeedSettingsAndMemories,
   filterActivityLogs,
+  normalizeActivityLimit,
   sanitizeUserForClient,
   shouldBumpSessionVersion,
   stripSettingsForAdmin,
@@ -153,6 +154,8 @@ function mapActivityRow(row: DbActivityLogRow): ActivityLogItem {
   };
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export class SupabaseStorageRepository implements StorageRepository {
   private readonly client: SupabaseClient;
   private readonly supabaseUrl: string;
@@ -187,7 +190,7 @@ export class SupabaseStorageRepository implements StorageRepository {
     });
   }
 
-  private async ensureUsersSeeded(): Promise<boolean> {
+  private async ensureUsersSeeded(): Promise<void> {
     const { count: userCount, error: userCountError } = await this.client
       .from('app_users')
       .select('id', { count: 'exact', head: true });
@@ -218,16 +221,25 @@ export class SupabaseStorageRepository implements StorageRepository {
       if (seedUserError) {
         throw new Error(`Không thể khởi tạo tài khoản mẫu Supabase: ${seedUserError.message}`);
       }
-      return true;
-    }
 
-    return false;
+      // One-time upgrade for Phase 1 site_settings rows existing before app_users was seeded.
+      const { error: upgradeErr } = await this.client
+        .from('site_settings')
+        .update({ viewer_passcode_enabled: true, updated_at: new Date().toISOString() })
+        .eq('id', 1)
+        .eq('viewer_passcode_enabled', false);
+      if (upgradeErr) {
+        throw new Error(`Không thể nâng cấp cấu hình bảo mật Supabase: ${upgradeErr.message}`);
+      }
+    }
   }
 
   private async ensureInitializedAndFetch(): Promise<{
     settings: SiteSettings;
     memories: MemoryItem[];
   }> {
+    await this.ensureUsersSeeded();
+
     const { data: settingsRow, error: settingsError } = await this.client
       .from('site_settings')
       .select('*')
@@ -239,10 +251,9 @@ export class SupabaseStorageRepository implements StorageRepository {
     }
 
     let settings: SiteSettings;
-    const hadExistingSettings = Boolean(settingsRow);
 
     if (!settingsRow) {
-      const seed = createInitialSeedData();
+      const seed = createSeedSettingsAndMemories();
       const { data: inserted, error: insertError } = await this.client
         .from('site_settings')
         .upsert(
@@ -295,18 +306,6 @@ export class SupabaseStorageRepository implements StorageRepository {
       }
     } else {
       settings = mapSettingsRow(settingsRow);
-    }
-
-    const seededUsersNow = await this.ensureUsersSeeded();
-    if (hadExistingSettings && seededUsersNow && !settings.viewerPasscodeEnabled) {
-      const { error: upgradeErr } = await this.client
-        .from('site_settings')
-        .update({ viewer_passcode_enabled: true, updated_at: new Date().toISOString() })
-        .eq('id', 1);
-      if (upgradeErr) {
-        throw new Error(`Không thể nâng cấp cấu hình bảo mật Supabase: ${upgradeErr.message}`);
-      }
-      settings = { ...settings, viewerPasscodeEnabled: true };
     }
 
     const { data: memoryRows, error: memoryError } = await this.client
@@ -561,7 +560,7 @@ export class SupabaseStorageRepository implements StorageRepository {
   }
 
   async getUserById(id: string): Promise<AppUser | null> {
-    if (!id) return null;
+    if (!id || !UUID_REGEX.test(id)) return null;
     const { data, error } = await this.client
       .from('app_users')
       .select('*')
@@ -569,6 +568,7 @@ export class SupabaseStorageRepository implements StorageRepository {
       .maybeSingle<DbAppUserRow>();
 
     if (error) {
+      if (error.code === '22P02') return null;
       throw new Error(`Lỗi truy vấn tài khoản Supabase: ${error.message}`);
     }
     return data ? mapUserRow(data) : null;
@@ -702,7 +702,7 @@ export class SupabaseStorageRepository implements StorageRepository {
   }
 
   async listActivityLogs(filters?: ListActivityLogsFilter): Promise<ActivityLogItem[]> {
-    const limit = Math.min(Math.max(filters?.limit ?? 100, 1), 500);
+    const limit = normalizeActivityLimit(filters?.limit);
     const hasSearch = Boolean(filters?.search?.trim());
 
     let query = this.client
