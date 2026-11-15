@@ -389,14 +389,21 @@ export function clearViewerCookiesOnResponse(response: NextResponse, request?: R
   clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
 }
 
-// Valid scrypt format (16-byte hex salt + 32-byte zero hash) used for constant-time dummy checks.
-const DUMMY_SCRYPT_HASH = `00112233445566778899aabbccddeeff:${'0'.repeat(64)}`;
+let cachedDummyHash: string | null = null;
+
+function getDummyScryptHash(): string {
+  if (!cachedDummyHash) {
+    cachedDummyHash = hashPasscode('ny-dummy-constant-time-secret');
+  }
+  return cachedDummyHash;
+}
 
 /**
  * Always execute scrypt verification even when the username does not exist
  * so response timing does not leak username existence.
  */
-export function verifyUserPasswordConstantTime(password: string, user: AppUser | null): boolean {
-  const matched = verifyPasscode(password, user ? user.passwordHash : DUMMY_SCRYPT_HASH);
+export function verifyUserPasswordConstantTime(user: AppUser | null, password: string): boolean {
+  const hashToCheck = user?.passwordHash || getDummyScryptHash();
+  const matched = verifyPasscode(password, hashToCheck);
   return Boolean(user) && matched;
 }

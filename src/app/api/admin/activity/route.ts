@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const auth = await requireAdminApiSession(request, repo);
     if (!auth.ok) return auth.response;
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(request.url, 'http://localhost');
     const rawEventType = searchParams.get('eventType')?.trim() || undefined;
     const rawUsername = searchParams.get('username')?.trim() || undefined;
     const rawSearch = searchParams.get('search')?.trim() || undefined;

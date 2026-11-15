@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { POST as activityPost } from '@/app/api/activity/route';
 import { GET as adminActivityGet } from '@/app/api/admin/activity/route';
 import { POST as loginPost } from '@/app/api/admin/login/route';
@@ -30,6 +30,7 @@ import {
   VIEWER_STEP1_COOKIE_NAME,
   VIEWER_UNLOCKED_COOKIE_NAME,
 } from '@/lib/auth';
+import { LocalStorageRepository } from '@/lib/storage/local-repository';
 
 describe('API route handlers', () => {
   let tempRoot: string;
@@ -47,6 +48,7 @@ describe('API route handlers', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     process.env = origEnv;
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
@@ -624,6 +626,17 @@ describe('API route handlers', () => {
     );
     expect(selfDeleteRes.status).toBe(400);
 
+    // Self-revokeSession is blocked with 400
+    const selfRevokeRes = await adminUserPatch(
+      new Request(`http://localhost/api/admin/users/${admin1.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', cookie: admin1Cookie },
+        body: JSON.stringify({ revokeSession: true }),
+      }),
+      { params: Promise.resolve({ id: String(admin1.id) }) }
+    );
+    expect(selfRevokeRes.status).toBe(400);
+
     // Duplicate username -> 409
     const dupRes = await adminUsersPost(
       new Request('http://localhost/api/admin/users', {
@@ -640,6 +653,43 @@ describe('API route handlers', () => {
       })
     );
     expect(dupRes.status).toBe(409);
+
+    // Concurrent createUser race conflict (Error 'đã tồn tại' & Postgres 23505) -> 409
+    vi.spyOn(LocalStorageRepository.prototype, 'createUser')
+      .mockRejectedValueOnce(new Error('Tên đăng nhập này đã tồn tại.'))
+      .mockRejectedValueOnce({ code: '23505', message: 'duplicate key value violates unique constraint' });
+
+    const raceTextConflictRes = await adminUsersPost(
+      new Request('http://localhost/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: admin1Cookie },
+        body: JSON.stringify({
+          username: 'race.user1',
+          displayName: 'Race 1',
+          role: 'viewer',
+          password: 'password123',
+          otpCode: '111222',
+          otpHint: '',
+        }),
+      })
+    );
+    expect(raceTextConflictRes.status).toBe(409);
+
+    const racePgConflictRes = await adminUsersPost(
+      new Request('http://localhost/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: admin1Cookie },
+        body: JSON.stringify({
+          username: 'race.user2',
+          displayName: 'Race 2',
+          role: 'viewer',
+          password: 'password123',
+          otpCode: '111222',
+          otpHint: '',
+        }),
+      })
+    );
+    expect(racePgConflictRes.status).toBe(409);
 
     // Create second admin + test immediate sessionVersion revocation on admin session
     const createAdmin2Res = await adminUsersPost(
@@ -863,6 +913,41 @@ describe('API route handlers', () => {
       })
     );
     expect(revokedActivityRes.status).toBe(401);
+    expect(revokedActivityRes.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.value).toBe('');
+    expect(revokedActivityRes.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.maxAge).toBe(0);
+    expect(revokedActivityRes.cookies.get(VIEWER_STEP1_COOKIE_NAME)?.value).toBe('');
+    expect(revokedActivityRes.cookies.get(VIEWER_STEP1_COOKIE_NAME)?.maxAge).toBe(0);
+    expect(revokedActivityRes.headers.getSetCookie().join(';')).toContain('Max-Age=0');
+
+    // Admin updating own password refreshes ny_admin_session so active admin isn't locked out
+    const selfPasswordUpdateRes = await adminUserPatch(
+      new Request(`http://localhost/api/admin/users/${admin1.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', cookie: admin1Cookie },
+        body: JSON.stringify({ password: 'new-admin-secret-password' }),
+      }),
+      { params: Promise.resolve({ id: String(admin1.id) }) }
+    );
+    expect(selfPasswordUpdateRes.status).toBe(200);
+    const updatedAdmin1 = (await selfPasswordUpdateRes.json()).user;
+    expect(updatedAdmin1.sessionVersion).toBe(2);
+    const refreshedAdminCookie = selfPasswordUpdateRes.cookies.get(ADMIN_COOKIE_NAME)?.value;
+    expect(refreshedAdminCookie).toBeTruthy();
+
+    // Old admin cookie is now stale (401); refreshed cookie continues working (200)
+    const oldCookieRes = await settingsGet(
+      new Request('http://localhost/api/admin/settings', {
+        headers: { cookie: admin1Cookie },
+      })
+    );
+    expect(oldCookieRes.status).toBe(401);
+
+    const refreshedCookieRes = await settingsGet(
+      new Request('http://localhost/api/admin/settings', {
+        headers: { cookie: `${ADMIN_COOKIE_NAME}=${refreshedAdminCookie}` },
+      })
+    );
+    expect(refreshedCookieRes.status).toBe(200);
   });
 
   test('authenticated upload, CRUD, reorder, settings update, and orphan cleanup work end-to-end', async () => {

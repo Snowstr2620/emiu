@@ -37,8 +37,11 @@ export async function POST(request: Request) {
     const user = await repo.createUser(validated.data);
     return NextResponse.json({ user }, { status: 201 });
   } catch (err) {
+    const code = err && typeof err === 'object' ? (err as { code?: unknown }).code : undefined;
+    if ((err instanceof Error && err.message.includes('đã tồn tại')) || code === '23505') {
+      return NextResponse.json({ error: 'Tên tài khoản này đã tồn tại.' }, { status: 409 });
+    }
     const message = err instanceof Error ? err.message : 'Không thể tạo tài khoản mới.';
-    const status = message.includes('đã tồn tại') ? 409 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

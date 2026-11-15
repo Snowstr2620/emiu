@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  clearViewerCookiesOnResponse,
   GUEST_COOLDOWN_COOKIE_NAME,
   GUEST_COOLDOWN_TTL_SECONDS,
   type GuestCooldownTokenPayload,
@@ -9,12 +10,13 @@ import {
   summarizeUserAgent,
   verifySessionPayload,
   verifyViewerTokenWithRepo,
+  VIEWER_STEP1_COOKIE_NAME,
   VIEWER_UNLOCKED_COOKIE_NAME,
 } from '@/lib/auth';
 import { getStorageRepository } from '@/lib/storage';
 import { type ClientActivityEventType, validateClientActivityPayload } from '@/lib/validation';
 
-const DEFAULT_EVENT_DETAILS: Record<ClientActivityEventType, string> = {
+const DEFAULT_ACTIVITY_DETAILS: Record<ClientActivityEventType, string> = {
   page_visit: 'Mở trang kỷ niệm',
   page_leave: 'Rời khỏi trang kỷ niệm',
   pixel_heart_viewed: 'Ngắm xong trái tim pixel',
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
         username: unlockedUser.username,
         userRole: unlockedUser.role,
         eventType,
-        detail: detail || DEFAULT_EVENT_DETAILS[eventType],
+        detail: detail || DEFAULT_ACTIVITY_DETAILS[eventType],
         deviceSummary,
         metadata,
       });
@@ -64,10 +66,18 @@ export async function POST(request: Request) {
 
     const { settings } = await repo.getPublicData();
     if (settings.viewerPasscodeEnabled && eventType !== 'page_visit' && eventType !== 'page_leave') {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Vui lòng mở khoá trang trước khi ghi nhận thao tác này.' },
         { status: 401 }
       );
+      const cookieHeader = request.headers.get('cookie');
+      if (
+        parseCookieFromHeader(cookieHeader, VIEWER_UNLOCKED_COOKIE_NAME) ||
+        parseCookieFromHeader(cookieHeader, VIEWER_STEP1_COOKIE_NAME)
+      ) {
+        clearViewerCookiesOnResponse(response, request);
+      }
+      return response;
     }
 
     if (eventType === 'page_visit' || eventType === 'page_leave') {
@@ -154,7 +164,7 @@ export async function POST(request: Request) {
       username: 'khach',
       userRole: 'guest',
       eventType,
-      detail: detail || DEFAULT_EVENT_DETAILS[eventType],
+      detail: detail || DEFAULT_ACTIVITY_DETAILS[eventType],
       deviceSummary,
       metadata,
     });

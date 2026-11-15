@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const { username, password } = validated.data;
     const repo = getStorageRepository();
     const user = await repo.getUserByUsername(username);
-    const passwordMatches = verifyUserPasswordConstantTime(password, user);
+    const passwordMatches = verifyUserPasswordConstantTime(user, password);
     const deviceSummary = summarizeUserAgent(request.headers.get('user-agent'));
 
     if (!user || !passwordMatches) {
