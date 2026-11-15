@@ -380,7 +380,7 @@ describe('SupabaseStorageRepository', () => {
     expect(okMock.calls).toContain('app_users.upsert:username:true');
 
     const admin = await repo.getAdminData();
-    expect(admin.settings.hasViewerPasscode).toBe(false);
+    expect('hasViewerPasscode' in admin.settings).toBe(false);
     expect('viewerPasscodeHash' in admin.settings).toBe(false);
     expect(admin.users).toHaveLength(2);
     expect(admin.trafficSummary.activeUsersCount).toBe(2);

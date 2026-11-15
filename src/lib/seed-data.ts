@@ -161,12 +161,11 @@ export function stripSettingsForPublic(settings: SiteSettings): PublicSiteSettin
 }
 
 export function stripSettingsForAdmin(settings: SiteSettings): AdminSiteSettings {
-  const { viewerPasscodeHash, ...rest } = settings;
+  const { viewerPasscodeHash: _hidden, ...rest } = settings;
   return {
     ...rest,
     usingDefaultAdminPassword: isUsingDefaultAdminPassword(),
     usingDefaultSessionSecret: !isSessionSecretConfigured(),
-    hasViewerPasscode: Boolean(viewerPasscodeHash),
   };
 }
 

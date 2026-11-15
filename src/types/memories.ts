@@ -84,8 +84,6 @@ export type PublicSiteSettings = Omit<SiteSettings, 'viewerPasscodeHash'>;
 export type AdminSiteSettings = Omit<SiteSettings, 'viewerPasscodeHash'> & {
   usingDefaultAdminPassword?: boolean;
   usingDefaultSessionSecret?: boolean;
-  /** @deprecated Kept temporarily until Task 4 cleans AdminDashboard settings UI. */
-  hasViewerPasscode?: boolean;
 };
 
 export interface MemoryItem {

@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Heart, Lock } from 'lucide-react';
+import { ArrowLeft, Heart, Lock, User } from 'lucide-react';
 
 interface AdminLoginFormProps {
   showDevDefaultHint?: boolean;
@@ -11,13 +11,15 @@ interface AdminLoginFormProps {
 
 export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormProps) {
   const router = useRouter();
+  const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!password.trim() || submitting) return;
+    const normalizedUsername = username.trim().toLowerCase();
+    if (!normalizedUsername || !password.trim() || submitting) return;
 
     setSubmitting(true);
     setError(null);
@@ -26,13 +28,13 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username: normalizedUsername, password }),
       });
 
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
 
       if (!response.ok) {
-        setError(payload.error || 'Mật khẩu quản trị chưa đúng.');
+        setError(payload.error || 'Tài khoản hoặc mật khẩu quản trị chưa đúng.');
         setSubmitting(false);
         return;
       }
@@ -80,6 +82,28 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <label
+              htmlFor="admin-username"
+              className="mb-1.5 block text-sm font-medium text-slate-700"
+            >
+              Tài khoản quản trị
+            </label>
+            <div className="relative">
+              <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                id="admin-username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="VD: admin"
+                autoComplete="username"
+                required
+                className="w-full rounded-2xl border border-slate-200/90 bg-white/90 py-3 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label
               htmlFor="admin-password"
               className="mb-1.5 block text-sm font-medium text-slate-700"
             >
@@ -109,19 +133,24 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
             </p>
           ) : null}
 
-          {showDevDefaultHint ? (
+          {process.env.NODE_ENV !== 'production' && showDevDefaultHint ? (
             <p className="rounded-xl border border-indigo-200/80 bg-indigo-50/80 px-3.5 py-2.5 text-xs leading-relaxed text-indigo-800">
-              Môi trường cục bộ đang dùng mật khẩu mặc định:{' '}
+              Môi trường cục bộ đang dùng tài khoản mặc định:{' '}
+              <code className="rounded bg-white/80 px-1.5 py-0.5 font-semibold text-indigo-950">
+                admin
+              </code>{' '}
+              / mật khẩu{' '}
               <code className="rounded bg-white/80 px-1.5 py-0.5 font-semibold text-indigo-950">
                 love2026
               </code>
-              . Hãy đổi biến <code className="font-semibold">ADMIN_PASSWORD</code> trước khi triển khai công khai.
+              . Hãy đổi biến <code className="font-semibold">ADMIN_PASSWORD</code> hoặc mật khẩu
+              trong trang quản trị trước khi triển khai công khai.
             </p>
           ) : null}
 
           <button
             type="submit"
-            disabled={submitting || !password.trim()}
+            disabled={submitting || !username.trim() || !password.trim()}
             className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-pink-500/20 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Đang đăng nhập...' : 'Vào trang quản trị'}

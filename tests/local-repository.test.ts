@@ -32,7 +32,7 @@ describe('LocalStorageRepository', () => {
     expect('viewerPasscodeHash' in pub.settings).toBe(false);
 
     const admin = await repo.getAdminData('00000000-0000-4000-8000-000000000001');
-    expect(admin.settings.hasViewerPasscode).toBe(false);
+    expect('hasViewerPasscode' in admin.settings).toBe(false);
     expect('viewerPasscodeHash' in admin.settings).toBe(false);
     expect(admin.users).toHaveLength(2);
     expect(admin.currentUser?.username).toBe('admin');

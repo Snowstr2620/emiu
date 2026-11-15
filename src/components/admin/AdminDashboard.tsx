@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  Activity,
   AlertTriangle,
   ArrowDown,
   ArrowUp,
@@ -14,15 +15,22 @@ import {
   HardDrive,
   Heart,
   ImagePlus,
+  KeyRound,
   Lock,
   LogOut,
   Mail,
   Music,
   Pencil,
   Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
   SlidersHorizontal,
   Trash2,
+  Unlock,
   Upload,
+  UserPlus,
+  Users,
 } from 'lucide-react';
 import { cleanupUploadedUrl, uploadMediaFile } from '@/lib/admin-upload';
 import {
@@ -31,13 +39,19 @@ import {
   getVietnamCalendarDateParts,
 } from '@/lib/date-utils';
 import type {
+  ActivityActorRole,
+  ActivityEventType,
+  ActivityLogItem,
   AdminSiteData,
   AdminSiteSettings,
   MemoryItem,
+  SafeAppUser,
   StorageStatus,
+  TrafficSummary,
+  UserRole,
 } from '@/types/memories';
 
-type AdminTab = 'memories' | 'settings' | 'letter';
+type AdminTab = 'memories' | 'settings' | 'letter' | 'users' | 'activity';
 
 interface AdminDashboardProps {
   initialData: AdminSiteData;
@@ -63,7 +77,117 @@ interface SettingsFormState {
   letterBody: string;
   letterSignature: string;
   viewerPasscodeEnabled: boolean;
-  viewerPasscode: string;
+}
+
+interface CreateUserFormState {
+  username: string;
+  displayName: string;
+  role: UserRole;
+  password: string;
+  otpCode: string;
+  otpHint: string;
+  isActive: boolean;
+}
+
+interface EditUserFormState {
+  displayName: string;
+  role: UserRole;
+  password: string;
+  otpCode: string;
+  otpHint: string;
+}
+
+const ACTIVITY_EVENT_META: Record<ActivityEventType, { label: string; badgeClass: string }> = {
+  page_visit: {
+    label: 'Ghé trang',
+    badgeClass: 'border-slate-200 bg-slate-100 text-slate-700',
+  },
+  page_leave: {
+    label: 'Rời trang',
+    badgeClass: 'border-slate-200 bg-slate-100 text-slate-700',
+  },
+  login_step1_ok: {
+    label: 'Đăng nhập bước 1',
+    badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  login_failed: {
+    label: 'Đăng nhập thất bại',
+    badgeClass: 'border-rose-200 bg-rose-50 text-rose-700',
+  },
+  otp_verified: {
+    label: 'Xác thực OTP thành công',
+    badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  otp_failed: {
+    label: 'Sai mã OTP',
+    badgeClass: 'border-rose-200 bg-rose-50 text-rose-700',
+  },
+  pixel_heart_viewed: {
+    label: 'Ngắm trái tim pixel',
+    badgeClass: 'border-pink-200 bg-pink-50 text-pink-700',
+  },
+  music_toggled: {
+    label: 'Bật / tắt nhạc nền',
+    badgeClass: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  },
+  memory_viewed: {
+    label: 'Xem ảnh kỷ niệm',
+    badgeClass: 'border-pink-200 bg-pink-50 text-pink-700',
+  },
+  letter_opened: {
+    label: 'Mở phong thư',
+    badgeClass: 'border-pink-200 bg-pink-50 text-pink-700',
+  },
+  logout: {
+    label: 'Đăng xuất',
+    badgeClass: 'border-slate-200 bg-slate-100 text-slate-700',
+  },
+};
+
+const ACTIVITY_EVENT_OPTIONS = Object.entries(ACTIVITY_EVENT_META) as Array<
+  [ActivityEventType, { label: string; badgeClass: string }]
+>;
+
+const ACTOR_ROLE_META: Record<ActivityActorRole, { label: string; badgeClass: string }> = {
+  admin: {
+    label: 'Admin',
+    badgeClass: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  },
+  viewer: {
+    label: 'Người thương',
+    badgeClass: 'border-pink-200 bg-pink-50 text-pink-700',
+  },
+  guest: {
+    label: 'Khách',
+    badgeClass: 'border-slate-200 bg-slate-100 text-slate-600',
+  },
+};
+
+function getActivityDisplayMeta(log: ActivityLogItem) {
+  const eventMeta = ACTIVITY_EVENT_META[log.eventType] ?? {
+    label: log.eventType,
+    badgeClass: 'border-slate-200 bg-slate-100 text-slate-700',
+  };
+  const roleMeta = ACTOR_ROLE_META[log.userRole] ?? ACTOR_ROLE_META.guest;
+  return { eventMeta, roleMeta };
+}
+
+function formatVietnamDateTime(iso: string | null | undefined, emptyLabel = 'Chưa có'): string {
+  if (!iso) return emptyLabel;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return String(iso);
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  return `${map.hour}:${map.minute}:${map.second} ${map.day}/${map.month}/${map.year}`;
 }
 
 function getTodayVietnamIso(): string {
@@ -82,20 +206,45 @@ function toSettingsForm(settings: AdminSiteSettings): SettingsFormState {
     letterBody: settings.letterBody,
     letterSignature: settings.letterSignature,
     viewerPasscodeEnabled: settings.viewerPasscodeEnabled,
-    viewerPasscode: '',
+  };
+}
+
+function createInitialUserForm(): CreateUserFormState {
+  return {
+    username: '',
+    displayName: '',
+    role: 'viewer',
+    password: '',
+    otpCode: '',
+    otpHint: '',
+    isActive: true,
   };
 }
 
 export function AdminDashboard({ initialData, storageStatus }: AdminDashboardProps) {
   const router = useRouter();
   const memoryFormRef = useRef<HTMLDivElement>(null);
+  const activityRequestSeqRef = useRef(0);
+
+  const currentUser = initialData.currentUser ?? null;
 
   const [activeTab, setActiveTab] = useState<AdminTab>('memories');
   const [memories, setMemories] = useState<MemoryItem[]>(initialData.memories);
-  const [settings, setSettings] = useState<AdminSiteSettings>(initialData.settings);
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>(() =>
     toSettingsForm(initialData.settings)
   );
+  const [users, setUsers] = useState<SafeAppUser[]>(initialData.users ?? []);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>(
+    initialData.activityLogs ?? []
+  );
+  const [trafficSummary, setTrafficSummary] = useState<TrafficSummary>(() => ({
+    visitsToday: initialData.trafficSummary?.visitsToday ?? 0,
+    otpVerifiedToday: initialData.trafficSummary?.otpVerifiedToday ?? 0,
+    failedAuthToday: initialData.trafficSummary?.failedAuthToday ?? 0,
+    activeUsersCount:
+      initialData.trafficSummary?.activeUsersCount ??
+      (initialData.users ?? []).filter((u) => u.isActive).length,
+  }));
 
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -119,6 +268,27 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
   const [pendingAudioFile, setPendingAudioFile] = useState<File | null>(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // Tab 4: Users state
+  const [createUserForm, setCreateUserForm] = useState<CreateUserFormState>(createInitialUserForm);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserForm, setEditUserForm] = useState<EditUserFormState>({
+    displayName: '',
+    role: 'viewer',
+    password: '',
+    otpCode: '',
+    otpHint: '',
+  });
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
+
+  // Tab 5: Activity filters state
+  const [activityEventFilter, setActivityEventFilter] = useState<string>('');
+  const [activityUsernameFilter, setActivityUsernameFilter] = useState<string>('');
+  const [activitySearch, setActivitySearch] = useState<string>('');
+  const [activityLimit, setActivityLimit] = useState<string>('100');
+  const [loadingActivity, setLoadingActivity] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -376,7 +546,6 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
     event.preventDefault();
     if (savingSettings) return;
 
-    const trimmedPin = settingsForm.viewerPasscode.trim();
     if (!settingsForm.coupleTitle.trim()) {
       showError('Vui lòng nhập tên hai bạn.');
       return;
@@ -387,18 +556,6 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
     }
     if (!settingsForm.letterTitle.trim() || !settingsForm.letterBody.trim()) {
       showError('Tiêu đề và nội dung bức tâm thư không được để trống.');
-      return;
-    }
-    if (
-      settingsForm.viewerPasscodeEnabled &&
-      !settings.hasViewerPasscode &&
-      trimmedPin.length === 0
-    ) {
-      showError('Vui lòng đặt mã mở khoá mới (ít nhất 3 ký tự) khi bật khoá riêng tư.');
-      return;
-    }
-    if (trimmedPin.length > 0 && trimmedPin.length < 3) {
-      showError('Mã kỷ niệm nên có ít nhất 3 ký tự.');
       return;
     }
 
@@ -426,7 +583,6 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
           letterBody: settingsForm.letterBody,
           letterSignature: settingsForm.letterSignature,
           viewerPasscodeEnabled: settingsForm.viewerPasscodeEnabled,
-          viewerPasscode: trimmedPin || undefined,
         }),
       });
 
@@ -447,7 +603,6 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
         return;
       }
 
-      setSettings(payload.settings);
       setSettingsForm(toSettingsForm(payload.settings));
       clearAudioFilePreview();
       showSuccess(successText);
@@ -460,30 +615,341 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
     }
   }
 
+  function syncUsers(nextUsers: SafeAppUser[]) {
+    setUsers(nextUsers);
+    const activeCount = nextUsers.filter((u) => u.isActive).length;
+    setTrafficSummary((prev) => ({ ...prev, activeUsersCount: activeCount }));
+  }
+
+  async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (creatingUser) return;
+
+    const normalizedUsername = createUserForm.username.trim().toLowerCase();
+    const trimmedDisplay = createUserForm.displayName.trim();
+    const trimmedOtp = createUserForm.otpCode.trim();
+
+    if (!/^[a-z0-9._-]{3,32}$/.test(normalizedUsername)) {
+      showError('Tên đăng nhập gồm 3–32 ký tự chữ thường, số hoặc dấu . _ -.');
+      return;
+    }
+    if (!trimmedDisplay) {
+      showError('Vui lòng nhập tên hiển thị cho tài khoản.');
+      return;
+    }
+    if (!createUserForm.password.trim() || createUserForm.password.length < 6) {
+      showError('Mật khẩu mới cần ít nhất 6 ký tự.');
+      return;
+    }
+    if (!/^\d{6}$/.test(trimmedOtp)) {
+      showError('Mã OTP phải gồm đúng 6 chữ số.');
+      return;
+    }
+
+    setCreatingUser(true);
+    setNotice(null);
+
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: normalizedUsername,
+          displayName: trimmedDisplay,
+          role: createUserForm.role,
+          password: createUserForm.password,
+          otpCode: trimmedOtp,
+          otpHint: createUserForm.otpHint.trim(),
+          isActive: createUserForm.isActive,
+        }),
+      });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        user?: SafeAppUser;
+        error?: string;
+      };
+
+      if (!res.ok || !payload.user) {
+        showError(payload.error || 'Không thể tạo tài khoản mới.');
+        return;
+      }
+
+      syncUsers([...users, payload.user]);
+      setCreateUserForm(createInitialUserForm());
+      showSuccess(`Đã tạo tài khoản @${payload.user.username}.`);
+    } catch {
+      showError('Không thể kết nối máy chủ khi tạo tài khoản.');
+    } finally {
+      setCreatingUser(false);
+    }
+  }
+
+  function openEditUserForm(targetUser: SafeAppUser) {
+    setConfirmDeleteUserId(null);
+    setEditingUserId(targetUser.id);
+    setEditUserForm({
+      displayName: targetUser.displayName,
+      role: targetUser.role,
+      password: '',
+      otpCode: '',
+      otpHint: targetUser.otpHint,
+    });
+    setNotice(null);
+  }
+
+  async function patchUserRecord(
+    targetUser: SafeAppUser,
+    patchBody: Record<string, unknown>,
+    options: {
+      fallbackError: string;
+      networkError: string;
+      onSuccess: (updated: SafeAppUser) => void;
+    }
+  ) {
+    if (busyUserId) return;
+    setBusyUserId(targetUser.id);
+    setNotice(null);
+
+    try {
+      const res = await fetch(`/api/admin/users/${targetUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchBody),
+      });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        user?: SafeAppUser;
+        error?: string;
+      };
+
+      if (!res.ok || !payload.user) {
+        showError(payload.error || options.fallbackError);
+        return;
+      }
+
+      syncUsers(users.map((u) => (u.id === targetUser.id ? payload.user! : u)));
+      options.onSuccess(payload.user);
+    } catch {
+      showError(options.networkError);
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function handleSaveEditUser(event: FormEvent<HTMLFormElement>, targetUser: SafeAppUser) {
+    event.preventDefault();
+    if (busyUserId) return;
+
+    const trimmedDisplay = editUserForm.displayName.trim();
+    const trimmedOtp = editUserForm.otpCode.trim();
+    if (!trimmedDisplay) {
+      showError('Tên hiển thị không được để trống.');
+      return;
+    }
+    if (editUserForm.password.length > 0 && editUserForm.password.length < 6) {
+      showError('Mật khẩu mới cần ít nhất 6 ký tự.');
+      return;
+    }
+    if (trimmedOtp.length > 0 && !/^\d{6}$/.test(trimmedOtp)) {
+      showError('Mã OTP mới phải gồm đúng 6 chữ số.');
+      return;
+    }
+
+    const patchBody: Record<string, unknown> = {
+      displayName: trimmedDisplay,
+      otpHint: editUserForm.otpHint.trim(),
+    };
+    if (targetUser.id !== currentUser?.id && editUserForm.role !== targetUser.role) {
+      patchBody.role = editUserForm.role;
+    }
+    if (editUserForm.password.length > 0) {
+      patchBody.password = editUserForm.password;
+    }
+    if (trimmedOtp.length > 0) {
+      patchBody.otpCode = trimmedOtp;
+    }
+
+    await patchUserRecord(targetUser, patchBody, {
+      fallbackError: 'Không thể cập nhật tài khoản.',
+      networkError: 'Không thể kết nối máy chủ khi cập nhật tài khoản.',
+      onSuccess: (updated) => {
+        setEditingUserId(null);
+        showSuccess(`Đã cập nhật tài khoản @${updated.username}.`);
+      },
+    });
+  }
+
+  async function handleToggleUserActive(targetUser: SafeAppUser) {
+    await patchUserRecord(
+      targetUser,
+      { isActive: !targetUser.isActive },
+      {
+        fallbackError: 'Không thể thay đổi trạng thái tài khoản.',
+        networkError: 'Không thể kết nối máy chủ khi đổi trạng thái tài khoản.',
+        onSuccess: (updated) => {
+          showSuccess(
+            updated.isActive
+              ? `Đã mở khoá tài khoản @${updated.username}.`
+              : `Đã tạm khoá tài khoản @${updated.username}.`
+          );
+        },
+      }
+    );
+  }
+
+  async function handleRevokeUserSession(targetUser: SafeAppUser) {
+    await patchUserRecord(
+      targetUser,
+      { revokeSession: true },
+      {
+        fallbackError: 'Không thể thu hồi phiên đăng nhập.',
+        networkError: 'Không thể kết nối máy chủ khi thu hồi phiên.',
+        onSuccess: (updated) => {
+          showSuccess(`Đã thu hồi toàn bộ phiên của @${updated.username}.`);
+        },
+      }
+    );
+  }
+
+  async function handleDeleteUser(targetUser: SafeAppUser) {
+    if (busyUserId) return;
+    setBusyUserId(targetUser.id);
+    setNotice(null);
+
+    try {
+      const res = await fetch(`/api/admin/users/${targetUser.id}`, {
+        method: 'DELETE',
+      });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        showError(payload.error || 'Không thể xoá tài khoản.');
+        return;
+      }
+
+      syncUsers(users.filter((u) => u.id !== targetUser.id));
+      setConfirmDeleteUserId(null);
+      if (editingUserId === targetUser.id) {
+        setEditingUserId(null);
+      }
+      showSuccess(`Đã xoá tài khoản @${targetUser.username}.`);
+    } catch {
+      showError('Không thể kết nối máy chủ khi xoá tài khoản.');
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function fetchActivityLogs(overrides?: {
+    eventType?: string;
+    username?: string;
+    search?: string;
+    limit?: string;
+  }) {
+    const requestSeq = ++activityRequestSeqRef.current;
+    setLoadingActivity(true);
+    setNotice(null);
+
+    const eventType = overrides?.eventType ?? activityEventFilter;
+    const username = overrides?.username ?? activityUsernameFilter;
+    const search = overrides?.search ?? activitySearch;
+    const limit = overrides?.limit ?? activityLimit;
+
+    const params = new URLSearchParams();
+    if (eventType) params.set('eventType', eventType);
+    if (username) params.set('username', username);
+    if (search.trim()) params.set('search', search.trim());
+    if (limit) params.set('limit', limit);
+
+    try {
+      const res = await fetch(`/api/admin/activity?${params.toString()}`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        logs?: ActivityLogItem[];
+        trafficSummary?: TrafficSummary;
+        error?: string;
+      };
+
+      if (requestSeq !== activityRequestSeqRef.current) return;
+
+      if (!res.ok || !Array.isArray(payload.logs)) {
+        showError(payload.error || 'Không thể tải nhật ký hoạt động.');
+        return;
+      }
+
+      setActivityLogs(payload.logs);
+      if (payload.trafficSummary) {
+        setTrafficSummary(payload.trafficSummary);
+      }
+    } catch {
+      if (requestSeq === activityRequestSeqRef.current) {
+        showError('Không thể kết nối máy chủ khi tải nhật ký.');
+      }
+    } finally {
+      if (requestSeq === activityRequestSeqRef.current) {
+        setLoadingActivity(false);
+      }
+    }
+  }
+
+  const activeAdminsCount = useMemo(
+    () => users.filter((u) => u.role === 'admin' && u.isActive).length,
+    [users]
+  );
+
   const activeImagePreview = memoryPreviewUrl || memoryForm.imageUrl.trim();
   const activeAudioPreview = audioPreviewUrl || settingsForm.musicUrl.trim();
 
   return (
-    <div className="min-h-screen px-4 pb-20 pt-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen overflow-x-hidden px-4 pb-20 pt-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
         {/* Top bar */}
         <header className="glass-card flex flex-col gap-4 rounded-3xl p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1.5">
+          <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-pink-50 text-pink-500">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-pink-50 text-pink-500">
                 <Heart className="h-4 w-4 fill-pink-500/20" />
               </span>
               <h1 className="font-serif text-2xl font-semibold text-slate-900">
                 Quản trị kỷ niệm
               </h1>
+              {currentUser ? (
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-pink-200 bg-pink-50/90 px-3 py-1 text-xs font-medium text-pink-700">
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{currentUser.displayName || currentUser.username}</span>
+                </span>
+              ) : null}
               {storageStatus.mode === 'supabase' ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-xs font-medium text-emerald-700">
-                  <Cloud className="h-3.5 w-3.5" />
+                  <Cloud className="h-3.5 w-3.5 shrink-0" />
                   Đã kết nối Supabase Cloud
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50/90 px-3 py-1 text-xs font-medium text-sky-700">
-                  <HardDrive className="h-3.5 w-3.5" />
+                  <HardDrive className="h-3.5 w-3.5 shrink-0" />
                   Chế độ lưu cục bộ trên máy
                 </span>
               )}
@@ -576,7 +1042,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
         {/* Navigation Tabs */}
         <nav
           aria-label="Mục quản trị"
-          className="glass-card flex flex-wrap gap-2 rounded-2xl p-2"
+          className="glass-card flex flex-wrap gap-1.5 rounded-2xl p-2 sm:gap-2"
         >
           <button
             type="button"
@@ -584,14 +1050,14 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               setActiveTab('memories');
               setNotice(null);
             }}
-            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition sm:flex-none ${
+            className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:px-4 sm:py-2.5 sm:text-sm ${
               activeTab === 'memories'
                 ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
             }`}
           >
-            <ImagePlus className="h-4 w-4" />
-            Kỷ niệm &amp; Ảnh ({memories.length})
+            <ImagePlus className="h-4 w-4 shrink-0" />
+            <span>Kỷ niệm &amp; Ảnh ({memories.length})</span>
           </button>
 
           <button
@@ -600,14 +1066,14 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               setActiveTab('settings');
               setNotice(null);
             }}
-            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition sm:flex-none ${
+            className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:px-4 sm:py-2.5 sm:text-sm ${
               activeTab === 'settings'
                 ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
             }`}
           >
-            <SlidersHorizontal className="h-4 w-4" />
-            Mở đầu, Nhạc nền &amp; Riêng tư
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            <span>Mở đầu, Nhạc nền &amp; Riêng tư</span>
           </button>
 
           <button
@@ -616,14 +1082,46 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               setActiveTab('letter');
               setNotice(null);
             }}
-            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition sm:flex-none ${
+            className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:px-4 sm:py-2.5 sm:text-sm ${
               activeTab === 'letter'
                 ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
             }`}
           >
-            <Mail className="h-4 w-4" />
-            Phong thư tâm sự
+            <Mail className="h-4 w-4 shrink-0" />
+            <span>Phong thư tâm sự</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('users');
+              setNotice(null);
+            }}
+            className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:px-4 sm:py-2.5 sm:text-sm ${
+              activeTab === 'users'
+                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
+            }`}
+          >
+            <Users className="h-4 w-4 shrink-0" />
+            <span>Tài khoản &amp; Kiểm soát truy cập ({users.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('activity');
+              setNotice(null);
+            }}
+            className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:px-4 sm:py-2.5 sm:text-sm ${
+              activeTab === 'activity'
+                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
+            }`}
+          >
+            <Activity className="h-4 w-4 shrink-0" />
+            <span>Nhật ký ra vào &amp; Hành động</span>
           </button>
         </nav>
 
@@ -944,7 +1442,8 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 Thông tin mở đầu, Nhạc nền &amp; Quyền riêng tư
               </h2>
               <p className="text-xs text-slate-500">
-                Tuỳ chỉnh lời chào đầu trang, số ngày bên nhau, bản nhạc nền và mã riêng tư nếu cần.
+                Tuỳ chỉnh lời chào đầu trang, số ngày bên nhau, bản nhạc nền và chế độ bảo vệ đăng
+                nhập 2 bước nếu cần.
               </p>
             </div>
 
@@ -1081,16 +1580,16 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               ) : null}
             </div>
 
-            {/* Viewer passcode block */}
-            <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white/60 p-4">
+            {/* Viewer access gate toggle + Tab 4 link */}
+            <div className="space-y-3 rounded-2xl border border-indigo-100/90 bg-white/70 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-indigo-500" />
+                  <Lock className="h-4 w-4 shrink-0 text-indigo-500" />
                   <span className="text-sm font-semibold text-slate-800">
-                    Khoá mã riêng tư cho trang chính
+                    Cổng đăng nhập riêng tư cho trang chính
                   </span>
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
                   <input
                     type="checkbox"
                     checked={settingsForm.viewerPasscodeEnabled}
@@ -1102,30 +1601,26 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     }
                     className="h-4 w-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400"
                   />
-                  Bật yêu cầu nhập mã kỷ niệm
+                  <span>Khoá bảo vệ trang kỷ niệm (Đăng nhập + OTP 6 số)</span>
                 </label>
               </div>
 
-              <p className="text-xs text-slate-500">
-                {settings.hasViewerPasscode
-                  ? 'Đã có mã mở khoá được lưu. Để trống ô dưới nếu bạn muốn giữ nguyên mã hiện tại.'
-                  : 'Chưa thiết lập mã mở khoá. Hãy nhập một mã dễ nhớ cho riêng hai bạn nếu bật tính năng này.'}
-              </p>
-
-              <input
-                type="password"
-                value={settingsForm.viewerPasscode}
-                onChange={(e) =>
-                  setSettingsForm((prev) => ({ ...prev, viewerPasscode: e.target.value }))
-                }
-                placeholder={
-                  settings.hasViewerPasscode
-                    ? 'Nhập mã mới nếu muốn thay đổi (ít nhất 3 ký tự)...'
-                    : 'Nhập mã mở khoá (VD: ngày kỷ niệm của hai bạn)...'
-                }
-                autoComplete="new-password"
-                className="w-full rounded-2xl border border-slate-200 bg-white/95 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-              />
+              <div className="flex flex-col gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-relaxed text-indigo-900">
+                  Khi bật khoá bảo vệ, người xem tại <code>/</code> phải đăng nhập bằng tài khoản
+                  riêng và xác thực mã OTP 6 chữ số trước khi ngắm trái tim pixel và đọc tâm thư.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('users');
+                    setNotice(null);
+                  }}
+                  className="inline-flex shrink-0 items-center justify-center rounded-xl border border-indigo-200 bg-white px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50"
+                >
+                  Đi tới quản lý tài khoản &amp; OTP -&gt;
+                </button>
+              </div>
             </div>
 
             <div className="flex justify-end">
@@ -1252,6 +1747,783 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               </div>
             </aside>
           </div>
+        ) : null}
+
+        {/* Tab 4: Users & Access Control */}
+        {activeTab === 'users' ? (
+          <section className="space-y-6">
+            {/* Create user form */}
+            <form
+              onSubmit={handleCreateUser}
+              className="glass-card space-y-5 rounded-3xl p-5 shadow-glass sm:p-6"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="h-4 w-4 text-pink-500" />
+                    <h2 className="text-lg font-semibold text-slate-900">Tạo tài khoản mới</h2>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Cấp tài khoản riêng cho người thương (chỉ xem <code>/</code>) hoặc thêm quản trị
+                    viên mới.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <label
+                    htmlFor="new-user-username"
+                    className="mb-1.5 block text-sm font-medium text-slate-700"
+                  >
+                    Tên đăng nhập
+                  </label>
+                  <input
+                    id="new-user-username"
+                    type="text"
+                    required
+                    value={createUserForm.username}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, username: e.target.value }))
+                    }
+                    placeholder="VD: emyeu"
+                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-user-display-name"
+                    className="mb-1.5 block text-sm font-medium text-slate-700"
+                  >
+                    Tên hiển thị ngọt ngào
+                  </label>
+                  <input
+                    id="new-user-display-name"
+                    type="text"
+                    required
+                    value={createUserForm.displayName}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, displayName: e.target.value }))
+                    }
+                    placeholder="VD: Em bé thương yêu"
+                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-user-role"
+                    className="mb-1.5 block text-sm font-medium text-slate-700"
+                  >
+                    Vai trò
+                  </label>
+                  <select
+                    id="new-user-role"
+                    value={createUserForm.role}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({
+                        ...prev,
+                        role: e.target.value as UserRole,
+                      }))
+                    }
+                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  >
+                    <option value="viewer">Người thương (chỉ xem /)</option>
+                    <option value="admin">Quản trị &amp; Xem</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-user-password"
+                    className="mb-1.5 block text-sm font-medium text-slate-700"
+                  >
+                    Mật khẩu
+                  </label>
+                  <input
+                    id="new-user-password"
+                    type="password"
+                    required
+                    value={createUserForm.password}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
+                    }
+                    placeholder="Ít nhất 6 ký tự..."
+                    autoComplete="new-password"
+                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-user-otp"
+                    className="mb-1.5 block text-sm font-medium text-slate-700"
+                  >
+                    Mã OTP 6 số
+                  </label>
+                  <input
+                    id="new-user-otp"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={createUserForm.otpCode}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({
+                        ...prev,
+                        otpCode: e.target.value.replace(/\D/g, '').slice(0, 6),
+                      }))
+                    }
+                    placeholder="VD: 121024"
+                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm tracking-widest text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-user-otp-hint"
+                    className="mb-1.5 block text-sm font-medium text-slate-700"
+                  >
+                    Gợi ý OTP
+                  </label>
+                  <input
+                    id="new-user-otp-hint"
+                    type="text"
+                    value={createUserForm.otpHint}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, otpHint: e.target.value }))
+                    }
+                    placeholder="VD: Ngày đầu tiên nắm tay nhau"
+                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                  <input
+                    id="new-user-active"
+                    type="checkbox"
+                    checked={createUserForm.isActive}
+                    onChange={(e) =>
+                      setCreateUserForm((prev) => ({ ...prev, isActive: e.target.checked }))
+                    }
+                    className="h-4 w-4 rounded border-slate-300 text-pink-500 focus:ring-pink-400"
+                  />
+                  Kích hoạt ngay
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={creatingUser}
+                  className="inline-flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="h-4 w-4" />
+                  {creatingUser ? 'Đang tạo...' : 'Tạo tài khoản'}
+                </button>
+              </div>
+            </form>
+
+            {/* User cards list */}
+            <div className="space-y-4">
+              {users.map((u) => {
+                const isSelf = Boolean(currentUser && u.id === currentUser.id);
+                const isSoleActiveAdmin =
+                  u.role === 'admin' && u.isActive && activeAdminsCount <= 1;
+                const lockDisabled = isSelf || isSoleActiveAdmin || busyUserId === u.id;
+                const revokeDisabled = isSelf || busyUserId === u.id;
+                const deleteDisabled = isSelf || isSoleActiveAdmin || busyUserId === u.id;
+                const isEditing = editingUserId === u.id;
+
+                return (
+                  <article
+                    key={u.id}
+                    data-testid={`user-card-${u.id}`}
+                    className="glass-card space-y-4 rounded-3xl p-5 shadow-glass"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="break-words font-serif text-xl font-semibold text-slate-900">
+                            {u.displayName}
+                          </h3>
+                          <span className="rounded-full border border-slate-200 bg-white/90 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                            @{u.username}
+                          </span>
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                              u.role === 'admin'
+                                ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                : 'border-pink-200 bg-pink-50 text-pink-700'
+                            }`}
+                          >
+                            {u.role === 'admin' ? 'Quản trị' : 'Người thương'}
+                          </span>
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                              u.isActive
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-rose-200 bg-rose-50 text-rose-700'
+                            }`}
+                          >
+                            {u.isActive ? 'Đang hoạt động' : 'Đã tạm khoá'}
+                          </span>
+                          {isSelf ? (
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                              Đang đăng nhập
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1">
+                            <KeyRound className="h-3.5 w-3.5 text-pink-400" />
+                            Phiên v{u.sessionVersion}
+                          </span>
+                          <span>
+                            Đăng nhập cuối:{' '}
+                            <strong className="font-medium text-slate-700">
+                              {formatVietnamDateTime(u.lastLoginAt, 'Chưa từng đăng nhập')}
+                            </strong>
+                          </span>
+                          <span className="break-words">
+                            Gợi ý OTP:{' '}
+                            <strong className="font-medium text-slate-700">
+                              {u.otpHint || 'Chưa thiết lập'}
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            isEditing ? setEditingUserId(null) : openEditUserForm(u)
+                          }
+                          disabled={busyUserId === u.id}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-pink-200 hover:text-pink-600 disabled:opacity-50"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          {isEditing ? 'Đóng sửa' : 'Sửa'}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={lockDisabled}
+                          title={
+                            isSelf
+                              ? 'Không thể tự khoá tài khoản đang đăng nhập'
+                              : isSoleActiveAdmin
+                                ? 'Không thể khoá tài khoản quản trị hoạt động cuối cùng'
+                                : undefined
+                          }
+                          onClick={() => handleToggleUserActive(u)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-amber-200 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {u.isActive ? (
+                            <>
+                              <Lock className="h-3.5 w-3.5" />
+                              Khoá
+                            </>
+                          ) : (
+                            <>
+                              <Unlock className="h-3.5 w-3.5" />
+                              Mở khoá
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={revokeDisabled}
+                          title={
+                            isSelf
+                              ? 'Không thể tự thu hồi phiên đang đăng nhập; hãy dùng nút Đăng xuất'
+                              : 'Thu hồi phiên đăng nhập từ xa'
+                          }
+                          onClick={() => handleRevokeUserSession(u)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-medium text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Thu hồi phiên
+                        </button>
+
+                        {confirmDeleteUserId === u.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={busyUserId === u.id}
+                              onClick={() => handleDeleteUser(u)}
+                              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                            >
+                              Xác nhận xoá
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteUserId(null)}
+                              className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600"
+                            >
+                              Huỷ
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={deleteDisabled}
+                            title={
+                              isSelf
+                                ? 'Không thể tự xoá tài khoản đang đăng nhập'
+                                : isSoleActiveAdmin
+                                  ? 'Không thể xoá tài khoản quản trị hoạt động cuối cùng'
+                                  : undefined
+                            }
+                            onClick={() => setConfirmDeleteUserId(u.id)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-medium text-rose-600 transition hover:border-rose-200 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Xoá
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {isEditing ? (
+                      <form
+                        onSubmit={(e) => handleSaveEditUser(e, u)}
+                        className="space-y-4 rounded-2xl border border-pink-100 bg-white/80 p-4"
+                      >
+                        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                          <div>
+                            <label
+                              htmlFor={`edit-display-${u.id}`}
+                              className="mb-1 block text-xs font-medium text-slate-700"
+                            >
+                              Tên hiển thị
+                            </label>
+                            <input
+                              id={`edit-display-${u.id}`}
+                              type="text"
+                              required
+                              value={editUserForm.displayName}
+                              onChange={(e) =>
+                                setEditUserForm((prev) => ({
+                                  ...prev,
+                                  displayName: e.target.value,
+                                }))
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor={`edit-role-${u.id}`}
+                              className="mb-1 block text-xs font-medium text-slate-700"
+                            >
+                              Vai trò
+                            </label>
+                            <select
+                              id={`edit-role-${u.id}`}
+                              disabled={isSelf || isSoleActiveAdmin}
+                              value={editUserForm.role}
+                              onChange={(e) =>
+                                setEditUserForm((prev) => ({
+                                  ...prev,
+                                  role: e.target.value as UserRole,
+                                }))
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200 disabled:bg-slate-100 disabled:text-slate-500"
+                            >
+                              <option value="viewer">Người thương (chỉ xem /)</option>
+                              <option value="admin">Quản trị &amp; Xem</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor={`edit-otp-hint-${u.id}`}
+                              className="mb-1 block text-xs font-medium text-slate-700"
+                            >
+                              Gợi ý OTP
+                            </label>
+                            <input
+                              id={`edit-otp-hint-${u.id}`}
+                              type="text"
+                              value={editUserForm.otpHint}
+                              onChange={(e) =>
+                                setEditUserForm((prev) => ({
+                                  ...prev,
+                                  otpHint: e.target.value,
+                                }))
+                              }
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor={`edit-password-${u.id}`}
+                              className="mb-1 block text-xs font-medium text-slate-700"
+                            >
+                              Mật khẩu mới (để trống nếu giữ nguyên)
+                            </label>
+                            <input
+                              id={`edit-password-${u.id}`}
+                              type="password"
+                              value={editUserForm.password}
+                              onChange={(e) =>
+                                setEditUserForm((prev) => ({
+                                  ...prev,
+                                  password: e.target.value,
+                                }))
+                              }
+                              placeholder="Tối thiểu 6 ký tự..."
+                              autoComplete="new-password"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor={`edit-otp-${u.id}`}
+                              className="mb-1 block text-xs font-medium text-slate-700"
+                            >
+                              Mã OTP 6 số mới (để trống nếu giữ nguyên)
+                            </label>
+                            <input
+                              id={`edit-otp-${u.id}`}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={6}
+                              value={editUserForm.otpCode}
+                              onChange={(e) =>
+                                setEditUserForm((prev) => ({
+                                  ...prev,
+                                  otpCode: e.target.value.replace(/\D/g, '').slice(0, 6),
+                                }))
+                              }
+                              placeholder="6 chữ số..."
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tracking-widest text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingUserId(null)}
+                            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-600"
+                          >
+                            Huỷ
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={busyUserId === u.id}
+                            className="rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-50"
+                          >
+                            {busyUserId === u.id ? 'Đang lưu...' : 'Lưu thay đổi'}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {/* Tab 5: Activity & Traffic Logs */}
+        {activeTab === 'activity' ? (
+          <section className="space-y-6">
+            {/* 4 Summary Cards */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+              <div
+                data-testid="stat-visits-today"
+                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+              >
+                <p className="text-xs font-medium text-slate-500">Ghé trang hôm nay</p>
+                <p className="mt-2 font-serif text-3xl font-bold text-slate-900">
+                  {trafficSummary.visitsToday}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-400">Tính theo giờ Việt Nam</p>
+              </div>
+
+              <div
+                data-testid="stat-otp-verified"
+                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+              >
+                <p className="text-xs font-medium text-emerald-700">Đã xác thực OTP</p>
+                <p className="mt-2 font-serif text-3xl font-bold text-emerald-700">
+                  {trafficSummary.otpVerifiedToday}
+                </p>
+                <p className="mt-1 text-[11px] text-emerald-600/80">Mở khoá thành công hôm nay</p>
+              </div>
+
+              <div
+                data-testid="stat-failed-auth"
+                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+              >
+                <p className="text-xs font-medium text-rose-700">Cảnh báo đăng nhập sai</p>
+                <p className="mt-2 font-serif text-3xl font-bold text-rose-600">
+                  {trafficSummary.failedAuthToday}
+                </p>
+                <p className="mt-1 text-[11px] text-rose-500/80">Sai mật khẩu / OTP hôm nay</p>
+              </div>
+
+              <div
+                data-testid="stat-active-users"
+                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+              >
+                <p className="text-xs font-medium text-indigo-700">Tài khoản hoạt động</p>
+                <p className="mt-2 font-serif text-3xl font-bold text-indigo-700">
+                  {trafficSummary.activeUsersCount}
+                </p>
+                <p className="mt-1 text-[11px] text-indigo-500/80">Đang được phép truy cập</p>
+              </div>
+            </div>
+
+            {/* Filter + Refresh Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                fetchActivityLogs();
+              }}
+              className="glass-card space-y-4 rounded-3xl p-4 shadow-glass sm:p-5"
+            >
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div>
+                  <label
+                    htmlFor="activity-event-filter"
+                    className="mb-1 block text-xs font-medium text-slate-700"
+                  >
+                    Loại hành động
+                  </label>
+                  <select
+                    id="activity-event-filter"
+                    value={activityEventFilter}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setActivityEventFilter(next);
+                      fetchActivityLogs({ eventType: next });
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  >
+                    <option value="">Tất cả</option>
+                    {ACTIVITY_EVENT_OPTIONS.map(([eventType, meta]) => (
+                      <option key={eventType} value={eventType}>
+                        {meta.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="activity-user-filter"
+                    className="mb-1 block text-xs font-medium text-slate-700"
+                  >
+                    Lọc tài khoản
+                  </label>
+                  <select
+                    id="activity-user-filter"
+                    value={activityUsernameFilter}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setActivityUsernameFilter(next);
+                      fetchActivityLogs({ username: next });
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  >
+                    <option value="">Tất cả tài khoản</option>
+                    <option value="khach">Khách ghé trang</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.username}>
+                        {u.displayName} (@{u.username})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="activity-search"
+                    className="mb-1 block text-xs font-medium text-slate-700"
+                  >
+                    Tìm kiếm nhật ký
+                  </label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="activity-search"
+                      type="text"
+                      value={activitySearch}
+                      onChange={(e) => setActivitySearch(e.target.value)}
+                      placeholder="Chi tiết, thiết bị..."
+                      className="w-full rounded-xl border border-slate-200 bg-white/95 py-2 pl-8 pr-3 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="activity-limit"
+                    className="mb-1 block text-xs font-medium text-slate-700"
+                  >
+                    Giới hạn dòng
+                  </label>
+                  <select
+                    id="activity-limit"
+                    value={activityLimit}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setActivityLimit(next);
+                      fetchActivityLogs({ limit: next });
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  >
+                    <option value="50">50 dòng</option>
+                    <option value="100">100 dòng</option>
+                    <option value="200">200 dòng</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={loadingActivity}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60"
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${loadingActivity ? 'animate-spin' : ''}`}
+                    />
+                    {loadingActivity ? 'Đang tải...' : 'Làm mới'}
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {/* Responsive Activity Feed */}
+            {activityLogs.length === 0 ? (
+              <div className="glass-card rounded-3xl p-10 text-center text-sm text-slate-500">
+                Chưa có bản ghi nhật ký phù hợp với bộ lọc hiện tại.
+              </div>
+            ) : (
+              <>
+                {/* Mobile stacked glass cards (< md) */}
+                <div data-testid="activity-mobile-list" className="space-y-3 md:hidden">
+                  {activityLogs.map((log) => {
+                    const { eventMeta, roleMeta } = getActivityDisplayMeta(log);
+
+                    return (
+                      <article
+                        key={log.id}
+                        className="glass-card min-w-0 space-y-2.5 rounded-2xl p-4 shadow-glass"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${eventMeta.badgeClass}`}
+                          >
+                            {eventMeta.label}
+                          </span>
+                          <span className="text-[11px] font-medium text-slate-500">
+                            {formatVietnamDateTime(log.createdAt)}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-semibold text-slate-800">
+                            @{log.username}
+                          </span>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${roleMeta.badgeClass}`}
+                          >
+                            {roleMeta.label}
+                          </span>
+                        </div>
+
+                        <p className="break-words text-sm text-slate-700">
+                          {log.detail || eventMeta.label}
+                        </p>
+
+                        <p className="break-words text-xs text-slate-400">
+                          {log.deviceSummary || 'Không rõ thiết bị'}
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                {/* Tablet & Desktop overflow-x-auto table (>= md) */}
+                <div
+                  data-testid="activity-desktop-table"
+                  className="hidden overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80 shadow-glass md:block"
+                >
+                  <table className="min-w-full divide-y divide-slate-200/80 text-left text-sm">
+                    <thead className="bg-slate-50/90 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th scope="col" className="whitespace-nowrap px-4 py-3">
+                          Thời gian (VN)
+                        </th>
+                        <th scope="col" className="whitespace-nowrap px-4 py-3">
+                          Tài khoản
+                        </th>
+                        <th scope="col" className="whitespace-nowrap px-4 py-3">
+                          Hành động
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Chi tiết
+                        </th>
+                        <th scope="col" className="whitespace-nowrap px-4 py-3">
+                          Thiết bị
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white/60">
+                      {activityLogs.map((log) => {
+                        const { eventMeta, roleMeta } = getActivityDisplayMeta(log);
+
+                        return (
+                          <tr key={log.id} className="align-top transition hover:bg-pink-50/30">
+                            <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600">
+                              {formatVietnamDateTime(log.createdAt)}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-slate-800">
+                                  @{log.username}
+                                </span>
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${roleMeta.badgeClass}`}
+                                >
+                                  {roleMeta.label}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${eventMeta.badgeClass}`}
+                              >
+                                {eventMeta.label}
+                              </span>
+                            </td>
+                            <td className="max-w-xs break-words px-4 py-3 text-xs text-slate-700">
+                              {log.detail || eventMeta.label}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
+                              {log.deviceSummary || 'Không rõ thiết bị'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
         ) : null}
       </div>
     </div>
