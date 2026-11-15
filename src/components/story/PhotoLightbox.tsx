@@ -50,7 +50,7 @@ export function PhotoLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={memory.title || 'Xem ảnh kỷ niệm'}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#050203]/88 p-4 backdrop-blur-lg sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#050203]/90 p-4 backdrop-blur-lg sm:p-6"
       onClick={onClose}
     >
       <div
@@ -101,7 +101,7 @@ export function PhotoLightbox({
           <img
             src={memory.imageUrl}
             alt={memory.imageAlt || memory.title || 'Ảnh kỷ niệm'}
-            className="max-h-full w-auto max-w-full rounded-xl object-contain"
+            className="max-h-full max-h-[calc(48vh-1rem)] w-auto max-w-full rounded-xl object-contain sm:max-h-[calc(56vh-1rem)]"
           />
 
           {hasMultiple && (

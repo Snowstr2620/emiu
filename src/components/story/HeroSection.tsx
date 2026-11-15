@@ -85,7 +85,7 @@ export function HeroSection({
         <button
           type="button"
           onClick={onStartJourney}
-          className="mt-10 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-500 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(225,29,72,0.38)] transition hover:brightness-110 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+          className="mt-10 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(225,29,72,0.38)] transition hover:brightness-110 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
         >
           <span>Dạo bước vào miền ký ức</span>
           <ArrowDown className="h-4 w-4" />

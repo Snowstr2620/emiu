@@ -63,7 +63,7 @@ export function EnvelopeLetter({
               type="button"
               onClick={handleOpenLetter}
               aria-label="Mở dấu niêm phong trái tim"
-              className="love-pulse-glow group flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-red-600 via-rose-600 to-pink-500 text-white shadow-[0_10px_28px_rgba(225,29,72,0.45)] transition hover:scale-105 motion-reduce:transform-none motion-reduce:transition-none"
+              className="love-pulse-glow group flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-red-600 via-rose-600 to-pink-600 text-white shadow-[0_10px_28px_rgba(225,29,72,0.45)] transition hover:scale-105 motion-reduce:transform-none motion-reduce:transition-none"
             >
               <Heart className="h-6 w-6 fill-white transition group-hover:scale-110 motion-reduce:transform-none motion-reduce:transition-none" />
             </button>
@@ -77,7 +77,7 @@ export function EnvelopeLetter({
           <button
             type="button"
             onClick={handleOpenLetter}
-            className="mt-6 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-500 px-7 py-3.5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(225,29,72,0.36)] transition hover:brightness-110 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+            className="mt-6 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-7 py-3.5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(225,29,72,0.36)] transition hover:brightness-110 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
           >
             <MailOpen className="h-4 w-4" />
             <span>Chạm để mở thư</span>
@@ -117,7 +117,7 @@ export function EnvelopeLetter({
             ))}
           </div>
 
-          <div className="rounded-2xl border border-rose-400/25 bg-[#16070d]/92 p-6 shadow-[inset_0_1px_0_rgba(255,228,230,0.07)] sm:p-10">
+          <div className="rounded-2xl border border-rose-400/25 bg-[#16070d]/95 p-6 shadow-[inset_0_1px_0_rgba(255,228,230,0.07)] sm:p-10">
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-rose-500/20 pb-4">
               <h3 className="break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold text-rose-50 sm:text-3xl">
                 {letterTitle}

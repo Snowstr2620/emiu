@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
   <defs>
-    <linearGradient id="sky2" x1="0%" y1="0%" x2="0%" y2="100%">
+    <linearGradient id="bg2" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#12050a"/>
       <stop offset="52%" stop-color="#240914"/>
       <stop offset="100%" stop-color="#4c0519"/>
@@ -11,7 +11,7 @@
       <stop offset="100%" stop-color="#e11d48" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="600" height="800" fill="url(#sky2)"/>
+  <rect width="600" height="800" fill="url(#bg2)"/>
   <rect width="600" height="800" fill="url(#sun2)"/>
   <!-- Crimson-rose sun disc -->
   <circle cx="300" cy="300" r="85" fill="#fb7185" fill-opacity="0.38"/>

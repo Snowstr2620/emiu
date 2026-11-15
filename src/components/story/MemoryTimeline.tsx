@@ -51,7 +51,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
               aria-pressed={viewMode === 'bento'}
               className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
                 viewMode === 'bento'
-                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-pink-500 text-white shadow-[0_6px_20px_rgba(225,29,72,0.35)]'
+                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-[0_6px_20px_rgba(225,29,72,0.35)]'
                   : 'text-rose-200/75 hover:text-rose-50'
               }`}
             >
@@ -64,7 +64,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
               aria-pressed={viewMode === 'stream'}
               className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
                 viewMode === 'stream'
-                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-pink-500 text-white shadow-[0_6px_20px_rgba(225,29,72,0.35)]'
+                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-[0_6px_20px_rgba(225,29,72,0.35)]'
                   : 'text-rose-200/75 hover:text-rose-50'
               }`}
             >

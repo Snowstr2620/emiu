@@ -246,19 +246,30 @@ export function StoryExperience({
         />
 
         {/* Unified Godly floating pill dock */}
-        <div className="pointer-events-none fixed inset-x-0 top-0 z-40 flex items-start justify-between gap-2 px-3 pt-3 sm:px-6 sm:pt-5">
-          <div className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
-            {currentUser && (
-              <div className="glass-pill inline-flex min-h-[36px] max-w-full items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-rose-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
-                <span
-                  aria-hidden="true"
-                  className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse motion-reduce:animate-none"
-                />
-                <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400 sm:h-3.5 sm:w-3.5" />
-                <span className="max-w-[130px] truncate sm:max-w-[200px]">{roleLabel}</span>
-              </div>
-            )}
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-40 flex flex-wrap items-center gap-1.5 px-3 pt-3 sm:gap-2 sm:px-6 sm:pt-5">
+          {currentUser && (
+            <div className="pointer-events-auto order-1 glass-pill inline-flex min-h-[36px] max-w-full items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-rose-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse motion-reduce:animate-none"
+              />
+              <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400 sm:h-3.5 sm:w-3.5" />
+              <span className="max-w-[130px] truncate sm:max-w-[200px]">{roleLabel}</span>
+            </div>
+          )}
 
+          <div className="pointer-events-auto order-2 ml-auto shrink-0 sm:order-last">
+            <AudioToggle
+              inline
+              musicUrl={settings.musicUrl}
+              musicEnabled={settings.musicEnabled}
+              isPlaying={isPlaying}
+              onToggle={handleToggleMusic}
+              onSyncPlayState={setIsPlaying}
+            />
+          </div>
+
+          <div className="pointer-events-auto order-3 flex flex-wrap items-center gap-1.5 sm:order-2 sm:gap-2">
             {currentUser?.role === 'admin' && (
               <Link
                 href="/admin"
@@ -290,17 +301,6 @@ export function StoryExperience({
                 <span>Đăng xuất</span>
               </button>
             )}
-          </div>
-
-          <div className="pointer-events-auto shrink-0">
-            <AudioToggle
-              inline
-              musicUrl={settings.musicUrl}
-              musicEnabled={settings.musicEnabled}
-              isPlaying={isPlaying}
-              onToggle={handleToggleMusic}
-              onSyncPlayState={setIsPlaying}
-            />
           </div>
         </div>
 

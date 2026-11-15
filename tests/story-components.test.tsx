@@ -193,7 +193,8 @@ describe('StoryExperience UI components', () => {
     expect(within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.')).toBeInTheDocument();
 
     const img = within(dialog).getByRole('img', { name: /Quán trà chiều mưa/i });
-    expect(img).toHaveClass('max-h-full');
+    expect(img).toHaveClass('max-h-full', 'max-h-[calc(48vh-1rem)]', 'sm:max-h-[calc(56vh-1rem)]');
+    expect(dialog).toHaveClass('bg-[#050203]/90');
     expect(img.parentElement).toHaveClass('shrink-0', 'min-h-[160px]', 'max-h-[48vh]');
     const captionContainer = within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.').parentElement;
     expect(captionContainer).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
@@ -229,9 +230,12 @@ describe('StoryExperience UI components', () => {
     expect(screen.queryByText('Đoạn thứ nhất của bức thư.')).not.toBeInTheDocument();
 
     const openBtn = screen.getByRole('button', { name: /Chạm để mở thư/i });
+    expect(openBtn).toHaveClass('to-pink-600');
     await user.click(openBtn);
 
-    expect(await screen.findByText('Gửi em yêu của anh,')).toBeInTheDocument();
+    const letterHeading = await screen.findByText('Gửi em yêu của anh,');
+    expect(letterHeading).toBeInTheDocument();
+    expect(letterHeading.closest('div')?.parentElement).toHaveClass('bg-[#16070d]/95');
     expect(screen.getByText('Đoạn thứ nhất của bức thư.')).toBeInTheDocument();
     expect(screen.getByText('Đoạn thứ hai đầy thương nhớ.')).toBeInTheDocument();
     expect(screen.getByText(/Thương em, Minh/)).toBeInTheDocument();
@@ -258,7 +262,8 @@ describe('StoryExperience UI components', () => {
       />
     );
 
-    expect(screen.getByText('Anh · Người giữ chìa khoá ký ức')).toBeInTheDocument();
+    const roleBadge = screen.getByText('Anh · Người giữ chìa khoá ký ức').closest('div')!;
+    expect(roleBadge).toHaveClass('order-1');
     const adminLink = screen.getByRole('link', { name: /Quản trị/i });
     expect(adminLink).toHaveAttribute('href', '/admin');
     expect(adminLink).toHaveClass('min-h-[36px]');
@@ -266,8 +271,17 @@ describe('StoryExperience UI components', () => {
     expect(heartReplayBtn).toHaveClass('min-h-[36px]');
     const logoutBtn = screen.getByRole('button', { name: /Đăng xuất/i });
     expect(logoutBtn).toHaveClass('min-h-[36px]');
+    expect(adminLink.parentElement).toHaveClass('order-3', 'flex-wrap', 'sm:order-2');
     const audioBtn = screen.getByRole('button', { name: /Bật nhạc nền/i });
     expect(audioBtn).toHaveClass('min-h-[36px]');
+    expect(audioBtn.parentElement?.parentElement).toHaveClass(
+      'order-2',
+      'ml-auto',
+      'shrink-0',
+      'sm:order-last'
+    );
+    expect(roleBadge.parentElement).toHaveClass('flex-wrap');
+    expect(roleBadge.parentElement).toBe(adminLink.parentElement?.parentElement);
 
     // Hero top clearance and timeline scroll margin
     expect(document.querySelector('header')).toHaveClass('pt-32');
@@ -456,8 +470,11 @@ describe('StoryExperience UI components', () => {
     expect(bentoBtn).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('#01').closest('article')).toHaveClass('lg:col-span-7');
 
-    // Zero blue/sky/indigo/violet/purple utility classes in rendered StoryExperience
+    // Zero blue/sky/indigo/violet/purple utility classes, invalid opacities, or low-contrast to-pink-500 CTAs
     expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
+    expect(container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
+    expect(screen.getByRole('button', { name: /Dạo bước vào miền ký ức/i })).toHaveClass('to-pink-600');
+    expect(bentoBtn).toHaveClass('to-pink-600');
 
     // Single-memory Bento spans full 12 columns centered
     rerender(
@@ -718,10 +735,26 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
   });
 
   test('ViewerPasscodeGate renders purely in Dark Velvet & Crimson-Rose without blue or purple classes', () => {
-    const { container } = render(
+    const { container, unmount } = render(
       <ViewerPasscodeGate coupleTitle="Minh & Lan" showDevDefaultHints={true} />
     );
     expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
+    expect(container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
+    expect(screen.getByLabelText(/Tài khoản của mình/i)).toHaveClass('placeholder:text-rose-300/60');
+    expect(screen.getByRole('button', { name: /Tiếp tục đến bước OTP/i })).toHaveClass('to-pink-600');
+    unmount();
+
+    const otpRender = render(
+      <ViewerPasscodeGate
+        coupleTitle="Minh & Lan"
+        initialStage="otp_pending"
+        initialUsername="nguoithuong"
+        initialDisplayName="Em bé thương yêu"
+      />
+    );
+    expect(otpRender.container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
+    expect(screen.getByLabelText('Chữ số OTP thứ 1')).toHaveClass('border-rose-400/50');
+    expect(screen.getByRole('button', { name: /Xác nhận bước vào tim nhau/i })).toHaveClass('to-pink-600');
   });
 });
 
@@ -761,7 +794,7 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
     );
 
     const ctaBtn = screen.getByRole('button', { name: /Mở khoá miền ký ức của tụi mình/i });
-    expect(ctaBtn).toHaveClass('motion-reduce:transform-none', 'motion-reduce:transition-none');
+    expect(ctaBtn).toHaveClass('to-pink-600', 'motion-reduce:transform-none', 'motion-reduce:transition-none');
     await user.click(ctaBtn);
     expect(onEnterStory).toHaveBeenCalledTimes(1);
   });
