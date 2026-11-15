@@ -14,6 +14,15 @@ interface LocalUploadResponse {
   uploadEndpoint: string;
 }
 
+export class UploadAuthError extends Error {
+  readonly status = 401;
+
+  constructor(message: string = 'Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.') {
+    super(message);
+    this.name = 'UploadAuthError';
+  }
+}
+
 function inferMimeType(file: File): string {
   if (file.type?.trim()) return file.type;
   const lower = file.name.toLowerCase();
@@ -50,6 +59,9 @@ export async function uploadMediaFile(file: File, kind: UploadKind): Promise<str
 
   if (!prepRes.ok) {
     const errMsg = 'error' in prepPayload ? prepPayload.error : undefined;
+    if (prepRes.status === 401) {
+      throw new UploadAuthError(errMsg);
+    }
     throw new Error(errMsg || 'Không thể chuẩn bị tải tệp lên.');
   }
 
@@ -87,6 +99,9 @@ export async function uploadMediaFile(file: File, kind: UploadKind): Promise<str
     };
 
     if (!localRes.ok || !localPayload.publicUrl) {
+      if (localRes.status === 401) {
+        throw new UploadAuthError(localPayload.error);
+      }
       throw new Error(localPayload.error || 'Không thể lưu tệp vào thư mục cục bộ.');
     }
 

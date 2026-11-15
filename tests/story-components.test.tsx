@@ -1,4 +1,5 @@
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -58,7 +59,7 @@ const SAMPLE_DATA: PublicSiteData = {
 const ADMIN_USER: SafeAppUser = {
   id: '00000000-0000-4000-8000-000000000001',
   username: 'admin',
-  displayName: 'Anh · Người giữ chìa khóa ký ức',
+  displayName: 'Anh · Người giữ chìa khoá ký ức',
   role: 'admin',
   otpHint: '140226',
   isActive: true,
@@ -178,7 +179,7 @@ describe('StoryExperience UI components', () => {
     expect(screen.getByText(/Chưa có kỷ niệm nào/i)).toBeInTheDocument();
   });
 
-  test('opens PhotoLightbox when clicking a memory photo, records memory_viewed, and closes on dismiss', async () => {
+  test('opens PhotoLightbox when clicking a memory photo, navigates prev/next with memory_viewed telemetry, preserves responsive stage classes, and closes on dismiss', async () => {
     const user = userEvent.setup();
     render(<StoryExperience data={SAMPLE_DATA} currentUser={VIEWER_USER} />);
 
@@ -191,13 +192,30 @@ describe('StoryExperience UI components', () => {
     expect(within(dialog).getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
     expect(within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.')).toBeInTheDocument();
 
-    const activities = getActivityCalls(fetchSpy);
-    expect(activities).toContainEqual(
-      expect.objectContaining({
-        eventType: 'memory_viewed',
-        metadata: { memoryId: 'mem-1', title: 'Buổi chiều mưa đầu tiên' },
-      })
+    const img = within(dialog).getByRole('img', { name: /Quán trà chiều mưa/i });
+    expect(img).toHaveClass('max-h-full');
+    expect(img.parentElement).toHaveClass('shrink-0', 'min-h-[160px]', 'max-h-[48vh]');
+    const captionContainer = within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.').parentElement;
+    expect(captionContainer).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
+
+    // Navigate next and previous
+    await user.click(within(dialog).getByRole('button', { name: /Ảnh tiếp theo/i }));
+    expect(within(dialog).getByText('Hoàng hôn trên đồi')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /Ảnh trước/i }));
+    expect(within(dialog).getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
+
+    const memoryViewedCalls = getActivityCalls(fetchSpy).filter(
+      (c) => c.eventType === 'memory_viewed'
     );
+    expect(memoryViewedCalls).toHaveLength(3);
+    expect(memoryViewedCalls[0].metadata).toEqual({
+      memoryId: 'mem-1',
+      title: 'Buổi chiều mưa đầu tiên',
+    });
+    expect(memoryViewedCalls[1].metadata).toEqual({
+      memoryId: 'mem-2',
+      title: 'Hoàng hôn trên đồi',
+    });
 
     const closeBtn = within(dialog).getByRole('button', { name: /Đóng xem ảnh/i });
     await user.click(closeBtn);
@@ -218,6 +236,10 @@ describe('StoryExperience UI components', () => {
     expect(screen.getByText('Đoạn thứ hai đầy thương nhớ.')).toBeInTheDocument();
     expect(screen.getByText(/Thương em, Minh/)).toBeInTheDocument();
 
+    const foldBtn = screen.getByRole('button', { name: /Gấp lại phong thư giữ vào tim/i });
+    expect(foldBtn).toHaveClass('min-h-[36px]');
+    expect(document.querySelector('[aria-hidden="true"].top-16')).toBeInTheDocument();
+
     const activities = getActivityCalls(fetchSpy);
     expect(activities).toContainEqual(
       expect.objectContaining({
@@ -236,24 +258,37 @@ describe('StoryExperience UI components', () => {
       />
     );
 
-    expect(screen.getByText('Anh · Quản trị')).toBeInTheDocument();
+    expect(screen.getByText('Anh · Người giữ chìa khoá ký ức')).toBeInTheDocument();
     const adminLink = screen.getByRole('link', { name: /Quản trị/i });
     expect(adminLink).toHaveAttribute('href', '/admin');
-    expect(screen.getByRole('button', { name: /Bật nhạc nền/i })).toBeInTheDocument();
+    expect(adminLink).toHaveClass('min-h-[36px]');
+    const heartReplayBtn = screen.getByRole('button', { name: /Ngắm lại trái tim pixel/i });
+    expect(heartReplayBtn).toHaveClass('min-h-[36px]');
+    const logoutBtn = screen.getByRole('button', { name: /Đăng xuất/i });
+    expect(logoutBtn).toHaveClass('min-h-[36px]');
+    const audioBtn = screen.getByRole('button', { name: /Bật nhạc nền/i });
+    expect(audioBtn).toHaveClass('min-h-[36px]');
+
+    // Hero top clearance and timeline scroll margin
+    expect(document.querySelector('header')).toHaveClass('pt-32');
+    expect(document.getElementById('timeline')).toHaveClass('scroll-mt-24');
 
     // Music toggle telemetry + reduced-motion safety on pulse icon
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
-    await user.click(screen.getByRole('button', { name: /Bật nhạc nền/i }));
+    await user.click(audioBtn);
     const pauseMusicBtn = screen.getByRole('button', { name: /Tạm dừng nhạc nền/i });
     expect(pauseMusicBtn.querySelector('svg')).toHaveClass('motion-reduce:animate-none');
     expect(getActivityCalls(fetchSpy)).toContainEqual(
       expect.objectContaining({ eventType: 'music_toggled' })
     );
 
-    // Replay Pixel Heart modal + Escape close
-    await user.click(screen.getByRole('button', { name: /Ngắm lại trái tim pixel/i }));
+    // Replay Pixel Heart modal + scrollable backdrop + h2 heading + Escape close
+    await user.click(heartReplayBtn);
     const heartDialog = await screen.findByRole('dialog');
+    expect(heartDialog).toHaveClass('overflow-y-auto', 'overscroll-contain', 'items-start', 'sm:items-center');
+    expect(heartDialog.firstElementChild).toHaveClass('my-auto');
+    expect(within(heartDialog).getByRole('heading', { level: 2, name: 'Minh & Lan' })).toBeInTheDocument();
     const replayCanvas = within(heartDialog).getByRole('img', {
       name: /Trái tim pixel đang ghép nối và đập nhịp yêu thương/i,
     });
@@ -263,6 +298,16 @@ describe('StoryExperience UI components', () => {
     );
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Empty displayName falls back cleanly by role
+    rerender(
+      <StoryExperience
+        data={SAMPLE_DATA}
+        currentUser={{ ...ADMIN_USER, displayName: '' }}
+        viewerPasscodeEnabled={true}
+      />
+    );
+    expect(screen.getByText('Anh · Quản trị')).toBeInTheDocument();
 
     // Viewer role hides /admin link
     rerender(
@@ -284,6 +329,55 @@ describe('StoryExperience UI components', () => {
     await waitFor(() => {
       expect(mockRouterRefresh).toHaveBeenCalledTimes(1);
     });
+  });
+
+  test('StoryExperience refreshes router on 401 activity response, respects reduced-motion scrollIntoView, and sends page_leave beacon in public mode', async () => {
+    const user = userEvent.setup();
+    const sendBeaconMock = vi.fn(() => true);
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      writable: true,
+      value: sendBeaconMock,
+    });
+
+    mockMatchMediaReducedMotion(true);
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/activity') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    const { unmount } = render(
+      <StoryExperience
+        data={SAMPLE_DATA}
+        currentUser={null}
+        viewerPasscodeEnabled={false}
+      />
+    );
+
+    // Public mode omits logout button and role badge
+    expect(screen.queryByRole('button', { name: /Đăng xuất/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Em bé thương yêu')).not.toBeInTheDocument();
+
+    // Start journey uses auto scrollIntoView when prefers-reduced-motion is active
+    const timelineEl = document.getElementById('timeline')!;
+    const scrollIntoViewMock = vi.fn();
+    timelineEl.scrollIntoView = scrollIntoViewMock;
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    await user.click(screen.getByRole('button', { name: /Dạo bước vào miền ký ức/i }));
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'auto' });
+
+    // 401 on /api/activity triggers router.refresh()
+    await waitFor(() => {
+      expect(mockRouterRefresh).toHaveBeenCalled();
+    });
+
+    // pagehide dispatches sendBeacon('/api/activity', ...)
+    fireEvent(window, new Event('pagehide'));
+    expect(sendBeaconMock).toHaveBeenCalledWith('/api/activity', expect.any(Blob));
+    unmount();
   });
 
   test('StoryExperience sends page_visit once per tab session for current user', () => {
@@ -403,8 +497,9 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
 
     // Step 3: PixelHeartIntro renders canvas WITHOUT calling router.refresh yet
     const enterStoryBtn = await screen.findByRole('button', {
-      name: /Mở khóa miền ký ức của tụi mình/i,
+      name: /Mở khoá miền ký ức của tụi mình/i,
     });
+    expect(screen.getByRole('heading', { level: 1, name: 'Minh & Lan' })).toBeInTheDocument();
     expect(document.querySelector('canvas')).toBeInTheDocument();
     expect(mockRouterRefresh).not.toHaveBeenCalled();
 
@@ -535,7 +630,7 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
       clipboardData: { getData: () => '121024' },
     });
     await user.click(screen.getByRole('button', { name: /Xác nhận bước vào tim nhau/i }));
-    await screen.findByRole('button', { name: /Mở khóa miền ký ức của tụi mình/i });
+    await screen.findByRole('button', { name: /Mở khoá miền ký ức của tụi mình/i });
 
     fireEvent(window, new Event('pagehide'));
     expect(sendBeaconMock).not.toHaveBeenCalled();
@@ -571,14 +666,15 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
     });
     expect(canvas.tagName).toBe('CANVAS');
     expect(screen.getByText(/Em bé thương yêu/)).toBeInTheDocument();
-    expect(canvas.closest('.glass-card')).toHaveClass('pt-10');
+    expect(screen.getByRole('heading', { level: 2, name: 'Anh & Em' })).toBeInTheDocument();
+    expect(canvas.closest('.glass-card')).toHaveClass('pt-12', 'sm:pt-8');
     expect(screen.getByText(/Dành riêng cho Em bé thương yêu/).parentElement).toHaveClass(
-      'max-w-[74%]'
+      'max-w-[68%]'
     );
 
-    await user.click(
-      screen.getByRole('button', { name: /Mở khóa miền ký ức của tụi mình/i })
-    );
+    const ctaBtn = screen.getByRole('button', { name: /Mở khoá miền ký ức của tụi mình/i });
+    expect(ctaBtn).toHaveClass('motion-reduce:transform-none', 'motion-reduce:transition-none');
+    await user.click(ctaBtn);
     expect(onEnterStory).toHaveBeenCalledTimes(1);
   });
 
@@ -652,5 +748,10 @@ describe('LoveEffectsLayer ambient effects & reduced motion', () => {
 
     fireEvent.pointerDown(document.body, { clientX: 120, clientY: 200 });
     expect(container.querySelectorAll('[data-love-burst="true"]')).toHaveLength(0);
+  });
+
+  test('renders zero ambient particles during SSR before client mount', () => {
+    const ssrHtml = renderToStaticMarkup(<LoveEffectsLayer />);
+    expect(ssrHtml).not.toContain('data-love-particle');
   });
 });

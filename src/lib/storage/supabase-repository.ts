@@ -362,9 +362,9 @@ export class SupabaseStorageRepository implements StorageRepository {
 
   async getAdminData(currentUserId?: string | null): Promise<AdminSiteData> {
     const { settings, memories } = await this.ensureInitializedAndFetch();
-    const [rawUsers, activityLogs] = await Promise.all([
+    const [rawUsers, allLogsForSummary] = await Promise.all([
       this.listRawUsers(),
-      this.listActivityLogs({ limit: 200 }),
+      this.listActivityLogs({ limit: 500 }),
     ]);
 
     const users = rawUsers.map(sanitizeUserForClient);
@@ -374,8 +374,8 @@ export class SupabaseStorageRepository implements StorageRepository {
       settings: stripSettingsForAdmin(settings),
       memories,
       users,
-      activityLogs,
-      trafficSummary: computeTrafficSummary(activityLogs, rawUsers),
+      activityLogs: allLogsForSummary.slice(0, 200),
+      trafficSummary: computeTrafficSummary(allLogsForSummary, rawUsers),
       currentUser,
     };
   }
@@ -449,13 +449,26 @@ export class SupabaseStorageRepository implements StorageRepository {
     return mapMemoryRow(data);
   }
 
-  async updateMemory(id: string, input: ValidatedMemoryPayload): Promise<MemoryItem | null> {
-    const { data: existing } = await this.client
+  private async findMemoryImageUrl(id: string): Promise<{ image_url: string } | null> {
+    if (!id || !UUID_REGEX.test(id)) return null;
+    const { data, error } = await this.client
       .from('memories')
       .select('image_url')
       .eq('id', id)
       .maybeSingle<{ image_url: string }>();
 
+    if (error) {
+      if (error.code === 'PGRST116' || error.code === '22P02') {
+        return null;
+      }
+      throw new Error(`Lỗi truy vấn kỷ niệm Supabase: ${error.message}`);
+    }
+
+    return data ?? null;
+  }
+
+  async updateMemory(id: string, input: ValidatedMemoryPayload): Promise<MemoryItem | null> {
+    const existing = await this.findMemoryImageUrl(id);
     if (!existing) return null;
 
     const { data, error } = await this.client
@@ -483,12 +496,7 @@ export class SupabaseStorageRepository implements StorageRepository {
   }
 
   async deleteMemory(id: string): Promise<boolean> {
-    const { data: existing } = await this.client
-      .from('memories')
-      .select('image_url')
-      .eq('id', id)
-      .maybeSingle<{ image_url: string }>();
-
+    const existing = await this.findMemoryImageUrl(id);
     if (!existing) return false;
 
     const { error } = await this.client.from('memories').delete().eq('id', id);

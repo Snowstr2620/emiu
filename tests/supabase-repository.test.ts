@@ -180,9 +180,12 @@ function createMockSupabaseClient(options?: {
 
       if (table === 'memories') {
         return {
-          select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+          select(cols?: string, opts?: { count?: string; head?: boolean }) {
             if (opts?.head) {
               return Promise.resolve({ count: memoryRows.length, error: null });
+            }
+            if (cols === 'image_url') {
+              return makeSelectFilterBuilder(() => memoryRows);
             }
             return {
               order() {
@@ -198,6 +201,14 @@ function createMockSupabaseClient(options?: {
                     };
                   },
                 };
+              },
+            };
+          },
+          delete() {
+            return {
+              eq: async (_col: string, id: string) => {
+                memoryRows = memoryRows.filter((row) => row.id !== id);
+                return { error: null };
               },
             };
           },
@@ -605,5 +616,117 @@ describe('SupabaseStorageRepository', () => {
       'https://example.supabase.co/storage/v1/object/public/love-memories/image/123-photo.jpg'
     );
     expect(mock.removedPaths).toEqual([['image/123-photo.jpg']]);
+  });
+
+  test('computes trafficSummary over up to 500 logs while slicing activityLogs to 200, and handles non-UUID/error in updateMemory & deleteMemory', async () => {
+    const nowIso = new Date().toISOString();
+    const manyLogs = Array.from({ length: 250 }, (_, idx) => ({
+      id: `00000000-0000-4000-8000-${String(idx + 1).padStart(12, '0')}`,
+      user_id: null,
+      username: 'khach',
+      user_role: 'guest',
+      event_type: 'page_visit',
+      detail: `Visit ${idx}`,
+      device_summary: 'Chrome · macOS',
+      metadata: null,
+      created_at: nowIso,
+    }));
+
+    const mock = createMockSupabaseClient({ initialActivityRows: manyLogs });
+    const repo = new SupabaseStorageRepository({
+      client: mock.client,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+
+    const adminData = await repo.getAdminData();
+    expect(adminData.activityLogs).toHaveLength(200);
+    expect(adminData.trafficSummary.visitsToday).toBe(250);
+
+    // Non-UUID id returns null/false cleanly without crashing
+    expect(
+      await repo.updateMemory('not-a-uuid', {
+        memoryDate: '2025-01-01',
+        title: 't',
+        story: 's',
+        imageUrl: '/samples/memory-1.svg',
+        imageAlt: 'a',
+      })
+    ).toBeNull();
+    expect(await repo.deleteMemory('not-a-uuid')).toBe(false);
+
+    // Unexpected DB error on lookup in updateMemory/deleteMemory is propagated, not swallowed as null/false
+    const failingClient = {
+      from(table: string) {
+        if (table === 'memories') {
+          return {
+            select() {
+              return {
+                eq() {
+                  return {
+                    maybeSingle: async () => ({
+                      data: null,
+                      error: { code: 'XX000', message: 'db connection dropped' },
+                    }),
+                  };
+                },
+              };
+            },
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      },
+    } as unknown as SupabaseClient;
+    const failingRepo = new SupabaseStorageRepository({
+      client: failingClient,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+    const validUuid = '11111111-1111-4111-8111-111111111101';
+    await expect(
+      failingRepo.updateMemory(validUuid, {
+        memoryDate: '2025-01-01',
+        title: 't',
+        story: 's',
+        imageUrl: '/samples/memory-1.svg',
+        imageAlt: 'a',
+      })
+    ).rejects.toThrow(/db connection dropped/);
+    await expect(failingRepo.deleteMemory(validUuid)).rejects.toThrow(/db connection dropped/);
+
+    // PGRST116 returns null / false cleanly
+    const notFoundClient = {
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle: async () => ({
+                    data: null,
+                    error: { code: 'PGRST116', message: 'Results contain 0 rows' },
+                  }),
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+    const notFoundRepo = new SupabaseStorageRepository({
+      client: notFoundClient,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+    expect(
+      await notFoundRepo.updateMemory(validUuid, {
+        memoryDate: '2025-01-01',
+        title: 't',
+        story: 's',
+        imageUrl: '/samples/memory-1.svg',
+        imageAlt: 'a',
+      })
+    ).toBeNull();
+    expect(await notFoundRepo.deleteMemory(validUuid)).toBe(false);
   });
 });

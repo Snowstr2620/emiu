@@ -324,6 +324,9 @@ export function validateCreateUserPayload(
   if (!USERNAME_REGEX.test(username)) {
     return { error: 'Tên đăng nhập gồm 3–32 ký tự chữ thường, số hoặc dấu . _ -.' };
   }
+  if (username === 'khach') {
+    return { error: 'Tên tài khoản "khach" được hệ thống dành riêng cho khách ghé trang.' };
+  }
   if (!displayName || displayName.length > 60) {
     return { error: 'Tên hiển thị cần từ 1 đến 60 ký tự.' };
   }

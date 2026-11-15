@@ -338,12 +338,12 @@ export function PixelHeartIntro({
   return (
     <div
       className={`glass-card relative mx-auto w-full max-w-md overflow-hidden rounded-3xl px-5 pb-7 text-center sm:px-8 sm:pb-9 ${
-        isModalReplay ? 'pt-10 sm:pt-6' : 'pt-7 sm:pt-9'
+        isModalReplay ? 'pt-12 sm:pt-8' : 'pt-7 sm:pt-9'
       }`}
     >
       <div
         className={`mx-auto inline-flex items-center gap-1.5 rounded-full bg-pink-50/90 px-3.5 py-1 text-xs font-semibold text-pink-600 shadow-sm ${
-          isModalReplay ? 'max-w-[74%]' : 'max-w-[82%]'
+          isModalReplay ? 'max-w-[68%]' : 'max-w-[82%]'
         }`}
       >
         <Sparkles className="h-3.5 w-3.5 shrink-0 text-pink-500" />
@@ -352,9 +352,15 @@ export function PixelHeartIntro({
         </span>
       </div>
 
-      <h2 className="mt-3 font-serif text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-        {coupleTitle}
-      </h2>
+      {isModalReplay ? (
+        <h2 className="mt-3 break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+          {coupleTitle}
+        </h2>
+      ) : (
+        <h1 className="mt-3 break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+          {coupleTitle}
+        </h1>
+      )}
 
       <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
         {isModalReplay
@@ -379,13 +385,13 @@ export function PixelHeartIntro({
         type="button"
         onClick={onEnterStory}
         disabled={entering}
-        className="love-pulse-glow inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-rose-400 via-pink-500 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-pink-500/25 transition hover:brightness-105 active:scale-[0.98] disabled:opacity-70"
+        className="love-pulse-glow inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-rose-400 via-pink-500 to-indigo-400 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-pink-500/25 transition hover:brightness-105 active:scale-[0.98] disabled:opacity-70 motion-reduce:transform-none motion-reduce:transition-none"
       >
         <Heart className="h-4 w-4 fill-white" />
         <span>
           {entering
             ? 'Đang mở cửa miền ký ức...'
-            : buttonLabel || 'Mở khóa miền ký ức của tụi mình'}
+            : buttonLabel || 'Mở khoá miền ký ức của tụi mình'}
         </span>
       </button>
     </div>

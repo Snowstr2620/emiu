@@ -63,7 +63,7 @@ export function PhotoLightbox({
           <X className="h-5 w-5" />
         </button>
 
-        <div className="relative flex min-h-[220px] items-center justify-center overflow-hidden rounded-2xl bg-white/60 p-2">
+        <div className="relative flex min-h-[160px] max-h-[48vh] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/60 p-2 sm:min-h-[200px] sm:max-h-[56vh]">
           {hasMultiple && (
             <button
               type="button"
@@ -81,7 +81,7 @@ export function PhotoLightbox({
           <img
             src={memory.imageUrl}
             alt={memory.imageAlt || memory.title || 'Ảnh kỷ niệm'}
-            className="max-h-[62vh] w-auto max-w-full rounded-xl object-contain"
+            className="max-h-full w-auto max-w-full rounded-xl object-contain"
           />
 
           {hasMultiple && (
@@ -96,7 +96,7 @@ export function PhotoLightbox({
           )}
         </div>
 
-        <div className="mt-4 overflow-y-auto px-1">
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
               <Heart className="h-3 w-3 fill-pink-500 text-pink-500" />
@@ -109,11 +109,11 @@ export function PhotoLightbox({
             )}
           </div>
           {memory.title && (
-            <h3 className="mt-2.5 font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+            <h3 className="mt-2.5 break-words [overflow-wrap:anywhere] font-serif text-xl font-bold text-slate-900 sm:text-2xl">
               {memory.title}
             </h3>
           )}
-          <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-600 sm:text-base">
+          <p className="mt-1.5 whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-slate-600 sm:text-base">
             {memory.story}
           </p>
         </div>

@@ -54,7 +54,7 @@ export function AudioToggle({
         type="button"
         onClick={onToggle}
         aria-label={isPlaying ? 'Tạm dừng nhạc nền' : 'Bật nhạc nền'}
-        className="glass-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-pink-200 hover:text-pink-600 sm:gap-2 sm:px-3.5 sm:py-2 sm:text-xs"
+        className="glass-pill inline-flex min-h-[36px] items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:border-pink-200 hover:text-pink-600 sm:gap-2 sm:px-3.5 sm:py-2 sm:text-xs"
       >
         {isPlaying ? (
           <>

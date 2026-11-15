@@ -13,7 +13,7 @@ interface MemoryTimelineProps {
 
 export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
   return (
-    <section id="timeline" className="mx-auto max-w-4xl px-4 py-12 sm:px-8 sm:py-16">
+    <section id="timeline" className="mx-auto max-w-4xl scroll-mt-24 px-4 py-12 sm:scroll-mt-20 sm:px-8 sm:py-16">
       <div className="mb-12 text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-pink-600 shadow-sm">
           <CalendarHeart className="h-3.5 w-3.5 text-pink-500" />
@@ -92,7 +92,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                         alt={memory.imageAlt || memory.title || 'Ảnh kỷ niệm'}
                         loading="lazy"
                         decoding="async"
-                        className="mx-auto max-h-[420px] w-auto max-w-full rounded-xl object-contain transition duration-300 group-hover:scale-[1.015]"
+                        className="mx-auto max-h-[420px] w-auto max-w-full rounded-xl object-contain transition duration-300 group-hover:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none"
                       />
                       <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm backdrop-blur-sm">
                         <Maximize2 className="h-3 w-3 text-pink-500" />
@@ -106,11 +106,11 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                         {formatMemoryDateVi(memory.memoryDate)}
                       </span>
                       {memory.title && (
-                        <h3 className="mt-2 font-serif text-xl font-bold text-slate-900">
+                        <h3 className="mt-2 break-words [overflow-wrap:anywhere] font-serif text-xl font-bold text-slate-900">
                           {memory.title}
                         </h3>
                       )}
-                      <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                      <p className="mt-1.5 whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-slate-600 sm:text-[15px]">
                         {memory.story}
                       </p>
                     </div>

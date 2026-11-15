@@ -63,9 +63,9 @@ export function EnvelopeLetter({
               type="button"
               onClick={handleOpenLetter}
               aria-label="Mở dấu niêm phong trái tim"
-              className="love-pulse-glow group flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-pink-500 text-white shadow-md shadow-pink-500/25 transition hover:scale-105"
+              className="love-pulse-glow group flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-pink-500 text-white shadow-md shadow-pink-500/25 transition hover:scale-105 motion-reduce:transform-none motion-reduce:transition-none"
             >
-              <Heart className="h-6 w-6 fill-white transition group-hover:scale-110" />
+              <Heart className="h-6 w-6 fill-white transition group-hover:scale-110 motion-reduce:transform-none motion-reduce:transition-none" />
             </button>
           </div>
 
@@ -77,7 +77,7 @@ export function EnvelopeLetter({
           <button
             type="button"
             onClick={handleOpenLetter}
-            className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-gradient-to-r from-rose-400 via-pink-500 to-indigo-400 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-pink-500/25 transition hover:brightness-105 active:scale-[0.98]"
+            className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-gradient-to-r from-rose-400 via-pink-500 to-indigo-400 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-pink-500/25 transition hover:brightness-105 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
           >
             <MailOpen className="h-4 w-4" />
             <span>Chạm để mở thư</span>
@@ -93,7 +93,7 @@ export function EnvelopeLetter({
           {/* Animated mini-hearts burst upon opening */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-8 z-10 -translate-x-1/2"
+            className="pointer-events-none absolute left-1/2 top-16 z-10 -translate-x-1/2"
           >
             {SEAL_BURST_HEARTS.map((item, idx) => (
               <motion.span
@@ -116,7 +116,7 @@ export function EnvelopeLetter({
 
           <div className="rounded-2xl border border-pink-100/80 bg-gradient-to-b from-[#fffdfd] to-[#fff7fa] p-6 shadow-inner sm:p-10">
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-pink-100/70 pb-4">
-              <h3 className="font-serif text-2xl font-semibold text-slate-900 sm:text-3xl">
+              <h3 className="break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold text-slate-900 sm:text-3xl">
                 {letterTitle}
               </h3>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-50 text-pink-500">
@@ -126,14 +126,14 @@ export function EnvelopeLetter({
 
             <div className="space-y-4 font-serif text-lg leading-relaxed text-slate-700 sm:text-xl">
               {paragraphs.map((paragraph, i) => (
-                <p key={i} className="whitespace-pre-line">
+                <p key={i} className="whitespace-pre-line break-words [overflow-wrap:anywhere]">
                   {paragraph}
                 </p>
               ))}
             </div>
 
             {letterSignature && (
-              <div className="mt-8 whitespace-pre-line border-t border-pink-100/70 pt-5 text-right font-serif text-lg italic text-pink-700 sm:text-xl">
+              <div className="mt-8 whitespace-pre-line break-words [overflow-wrap:anywhere] border-t border-pink-100/70 pt-5 text-right font-serif text-lg italic text-pink-700 sm:text-xl">
                 {letterSignature}
               </div>
             )}
@@ -143,7 +143,7 @@ export function EnvelopeLetter({
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="text-xs font-medium text-slate-400 transition hover:text-pink-500"
+              className="inline-flex min-h-[36px] items-center rounded-full px-3 py-2 text-xs font-medium text-slate-400 transition hover:text-pink-500"
             >
               Gấp lại phong thư giữ vào tim
             </button>

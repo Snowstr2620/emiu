@@ -48,7 +48,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12">
+    <main className="relative flex min-h-screen items-center justify-center overflow-x-hidden px-4 py-12">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-[#FBCFE8]/50 blur-3xl"
@@ -62,7 +62,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
         <div className="mb-6 flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-pink-600"
+            className="inline-flex min-h-[36px] items-center gap-1.5 px-2 py-1.5 text-sm font-medium text-slate-600 transition hover:text-pink-600"
           >
             <ArrowLeft className="h-4 w-4" />
             Về trang kỷ niệm
@@ -97,7 +97,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
                 placeholder="VD: admin"
                 autoComplete="username"
                 required
-                className="w-full rounded-2xl border border-slate-200/90 bg-white/90 py-3 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                className="w-full rounded-2xl border border-slate-200/90 bg-white/90 py-3 pl-10 pr-4 text-base text-slate-900 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-200 sm:text-sm"
               />
             </div>
           </div>
@@ -119,7 +119,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
                 placeholder="Nhập mật khẩu..."
                 autoComplete="current-password"
                 required
-                className="w-full rounded-2xl border border-slate-200/90 bg-white/90 py-3 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                className="w-full rounded-2xl border border-slate-200/90 bg-white/90 py-3 pl-10 pr-4 text-base text-slate-900 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-200 sm:text-sm"
               />
             </div>
           </div>

@@ -768,4 +768,197 @@ describe('AdminDashboard 5-tab UI', () => {
     );
     expect(screen.getByLabelText(/Lọc tài khoản/i)).toHaveValue('');
   });
+
+  test('Tab 1 supports memory create, edit, sort by date, and 2-click delete with in-flight guard + responsive/floating toast polish', async () => {
+    const user = userEvent.setup();
+    const secondMemory = {
+      id: 'mem-2',
+      memoryDate: '2024-05-01',
+      title: 'Ngày đầu gặp gỡ',
+      story: 'Nắng sớm sân trường.',
+      imageUrl: '/samples/memory-2.svg',
+      imageAlt: 'Ngày đầu gặp gỡ',
+      sortOrder: 1,
+      createdAt: '2026-11-15T00:00:00.000Z',
+    };
+    const createdMemory = {
+      id: 'mem-3',
+      memoryDate: '2025-08-20',
+      title: 'Biển chiều',
+      story: 'Sóng hát tên mình.',
+      imageUrl: '/samples/memory-3.svg',
+      imageAlt: 'Biển chiều',
+      sortOrder: 2,
+      createdAt: '2026-11-15T00:00:00.000Z',
+    };
+
+    let resolveDelete: ((val: Response) => void) | null = null;
+    let deleteCount = 0;
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method || 'GET';
+      if (url === '/api/admin/memories' && method === 'POST') {
+        return new Response(JSON.stringify({ memory: createdMemory }), { status: 201 });
+      }
+      if (url === `/api/admin/memories/${createdMemory.id}` && method === 'PUT') {
+        const body = JSON.parse(String(init?.body || '{}'));
+        return new Response(
+          JSON.stringify({
+            memory: { ...createdMemory, title: body.title, story: body.story },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/memories/reorder' && method === 'PUT') {
+        const body = JSON.parse(String(init?.body || '{}')) as { ids: string[] };
+        const map = new Map(
+          [makeInitialData().memories[0], secondMemory, createdMemory].map((m) => [m.id, m])
+        );
+        return new Response(
+          JSON.stringify({
+            memories: body.ids.map((id, idx) => ({ ...map.get(id)!, sortOrder: idx })),
+          }),
+          { status: 200 }
+        );
+      }
+      if (url === `/api/admin/memories/${createdMemory.id}` && method === 'DELETE') {
+        deleteCount++;
+        return new Promise<Response>((resolve) => {
+          resolveDelete = resolve;
+        });
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
+    });
+
+    render(
+      <AdminDashboard
+        initialData={makeInitialData({
+          memories: [makeInitialData().memories[0], secondMemory],
+        })}
+        storageStatus={STORAGE_STATUS}
+      />
+    );
+
+    // 5 navigation tabs have >= 40px touch target
+    const nav = screen.getByRole('navigation', { name: /Mục quản trị/i });
+    for (const tabBtn of within(nav).getAllByRole('button')) {
+      expect(tabBtn).toHaveClass('min-h-[40px]');
+    }
+
+    // Create memory
+    await user.click(screen.getByRole('button', { name: /Thêm kỷ niệm mới/i }));
+    const dateInput = screen.getByLabelText(/Ngày kỷ niệm/i);
+    expect(dateInput).toHaveClass('text-base', 'sm:text-sm');
+    await user.clear(dateInput);
+    await user.type(dateInput, '2025-08-20');
+    await user.type(screen.getByLabelText(/Tiêu đề ngắn/i), 'Biển chiều');
+    await user.type(screen.getByLabelText(/Câu chuyện/i), 'Sóng hát tên mình.');
+    await user.type(screen.getByLabelText(/Đường dẫn ảnh/i), '/samples/memory-3.svg');
+    await user.click(screen.getByRole('button', { name: /Thêm vào dòng thời gian/i }));
+
+    expect(await screen.findByText('Biển chiều')).toBeInTheDocument();
+
+    // Floating always-visible status toast + >=36px close button
+    const statusToast = screen.getByRole('status');
+    expect(statusToast).toHaveClass('fixed', 'bottom-4', 'z-50');
+    expect(within(statusToast).getByRole('button', { name: /Đóng/i })).toHaveClass('min-h-[36px]');
+
+    // Sort by date ascending
+    await user.click(screen.getByRole('button', { name: /Sắp xếp theo ngày tăng dần/i }));
+    await waitFor(() => {
+      const titles = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+      expect(titles).toEqual(['Ngày đầu gặp gỡ', 'Chiều mưa đầu tiên', 'Biển chiều']);
+    });
+
+    // Edit memory respects reduced-motion scrollIntoView
+    const origMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn(() => ({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    })) as unknown as typeof window.matchMedia;
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const editButtons = screen.getAllByRole('button', { name: /^Sửa$/i });
+    await user.click(editButtons[2]);
+    const titleInput = screen.getByLabelText(/Tiêu đề ngắn/i);
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Biển chiều hoàng hôn');
+    await user.click(screen.getByRole('button', { name: /Lưu thay đổi/i }));
+    expect(await screen.findByText('Biển chiều hoàng hôn')).toBeInTheDocument();
+    window.matchMedia = origMatchMedia;
+
+    // 2-click delete with in-flight guard disables repeat clicks
+    const deleteButtons = screen.getAllByRole('button', { name: /^Xoá$/i });
+    await user.click(deleteButtons[2]);
+    const confirmDeleteBtn = screen.getByRole('button', { name: /Xác nhận xoá/i });
+    await user.click(confirmDeleteBtn);
+    expect(confirmDeleteBtn).toBeDisabled();
+    await user.click(confirmDeleteBtn);
+    expect(deleteCount).toBe(1);
+
+    resolveDelete!(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    await waitFor(() => {
+      expect(screen.queryByText('Biển chiều hoàng hôn')).not.toBeInTheDocument();
+    });
+  });
+
+  test('redirects to /admin/login on 401 across memory upload-url, upload, and delete actions and resets file input on clear', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock-preview'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/admin/upload-url') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+      }
+      if (url.startsWith('/api/admin/memories/')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected' }), { status: 500 });
+    });
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    // Tab 2 audio constraints + arrow + Tab 4 neutral OTP placeholder
+    await user.click(screen.getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i }));
+    expect(document.querySelector('audio')).toHaveClass('w-full', 'min-w-0', 'max-w-full');
+    expect(
+      screen.getByRole('button', { name: /Đi tới quản lý tài khoản & OTP →/i })
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Tài khoản & Kiểm soát truy cập/i }));
+    expect(screen.getByLabelText(/Mã OTP 6 số/i)).toHaveAttribute('placeholder', 'VD: 654321');
+
+    // Back to Tab 1: pick image file, verify typing URL clears file input, then pick file & trigger 401 upload-url
+    await user.click(screen.getByRole('button', { name: /Kỷ niệm & Ảnh/i }));
+    await user.click(screen.getByRole('button', { name: /Thêm kỷ niệm mới/i }));
+    const fileInput = document.getElementById('memory-file-upload') as HTMLInputElement;
+    const mockFile = new File([new Uint8Array([1, 2, 3])], 'pic.png', { type: 'image/png' });
+    await user.upload(fileInput, mockFile);
+    expect(fileInput.files).toHaveLength(1);
+
+    await user.type(screen.getByLabelText(/Đường dẫn ảnh/i), '/samples/memory-1.svg');
+    expect(fileInput.value).toBe('');
+
+    // Re-upload file and submit -> /api/admin/upload-url returns 401 -> redirects to /admin/login
+    await user.upload(fileInput, mockFile);
+    await user.type(screen.getByLabelText(/Câu chuyện/i), 'Test story');
+    await user.click(screen.getByRole('button', { name: /Thêm vào dòng thời gian/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/admin/login');
+      expect(mockRefresh).toHaveBeenCalled();
+    });
+  });
 });

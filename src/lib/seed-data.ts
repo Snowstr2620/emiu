@@ -39,13 +39,17 @@ export function buildInitialUsers(now: string = new Date().toISOString()): AppUs
   }
 
   const adminPassword = configuredAdminPass || 'love2026';
-  const adminOtp = process.env.ADMIN_DEFAULT_OTP?.trim() || '140226';
+  const configuredAdminOtp = process.env.ADMIN_DEFAULT_OTP?.trim();
+  if (configuredAdminOtp && !/^\d{6}$/.test(configuredAdminOtp)) {
+    throw new Error('ADMIN_DEFAULT_OTP phải gồm đúng 6 chữ số (0-9) khi được cấu hình.');
+  }
+  const adminOtp = configuredAdminOtp || '140226';
 
   return [
     {
       id: SEED_ADMIN_USER_ID,
       username: 'admin',
-      displayName: 'Anh · Người giữ chìa khóa ký ức',
+      displayName: 'Anh · Người giữ chìa khoá ký ức',
       role: 'admin',
       passwordHash: hashPasscode(adminPassword),
       otpHash: hashPasscode(adminOtp),
@@ -72,8 +76,6 @@ export function buildInitialUsers(now: string = new Date().toISOString()): AppUs
     },
   ];
 }
-
-export const buildDefaultUsers = buildInitialUsers;
 
 export function createSeedSettingsAndMemories(now: string = new Date().toISOString()): {
   settings: SiteSettings;
@@ -185,15 +187,15 @@ export function ensureSeededUsersAndUpgrade(raw: Partial<LocalDbSchema>): {
   const hasExistingUsers = Array.isArray(raw.users) && raw.users.length > 0;
   const users: AppUser[] = hasExistingUsers
     ? raw.users!.map((u) => ({
-        ...u,
-        otpHint: u.otpHint ?? '',
-        sessionVersion: typeof u.sessionVersion === 'number' ? u.sessionVersion : 1,
-        lastLoginAt: u.lastLoginAt ?? null,
-      }))
+      ...u,
+      otpHint: u.otpHint ?? '',
+      sessionVersion: typeof u.sessionVersion === 'number' ? u.sessionVersion : 1,
+      lastLoginAt: u.lastLoginAt ?? null,
+    }))
     : (() => {
-        migrated = true;
-        return buildInitialUsers(now);
-      })();
+      migrated = true;
+      return buildInitialUsers(now);
+    })();
 
   const baseSettings = raw.settings ? { ...fallback.settings, ...raw.settings } : fallback.settings;
   if (!raw.settings) {
@@ -213,16 +215,16 @@ export function ensureSeededUsersAndUpgrade(raw: Partial<LocalDbSchema>): {
   const memories = Array.isArray(raw.memories)
     ? [...raw.memories].sort((a, b) => a.sortOrder - b.sortOrder)
     : (() => {
-        migrated = true;
-        return fallback.memories;
-      })();
+      migrated = true;
+      return fallback.memories;
+    })();
 
   const activityLogs = Array.isArray(raw.activityLogs)
     ? raw.activityLogs
     : (() => {
-        migrated = true;
-        return [];
-      })();
+      migrated = true;
+      return [];
+    })();
 
   return {
     db: {
@@ -303,10 +305,10 @@ export function shouldBumpSessionVersion(
 ): boolean {
   return Boolean(
     input.revokeSession ||
-      input.password ||
-      input.otpCode ||
-      (input.role !== undefined && input.role !== current.role) ||
-      (current.isActive && input.isActive === false)
+    input.password ||
+    input.otpCode ||
+    (input.role !== undefined && input.role !== current.role) ||
+    (current.isActive && input.isActive === false)
   );
 }
 

@@ -405,5 +405,5 @@ function getDummyScryptHash(): string {
 export function verifyUserPasswordConstantTime(user: AppUser | null, password: string): boolean {
   const hashToCheck = user?.passwordHash || getDummyScryptHash();
   const matched = verifyPasscode(password, hashToCheck);
-  return Boolean(user) && matched;
+  return Boolean(user?.passwordHash) && matched;
 }

@@ -81,14 +81,16 @@ function shouldSkipBurstTarget(target: EventTarget | null): boolean {
 }
 
 export function LoveEffectsLayer() {
-  // Keep initial render aligned with SSR to prevent hydration mismatches;
-  // CSS @media (prefers-reduced-motion: reduce) blocks animations before mount.
+  // Keep initial SSR/hydration render empty to avoid pre-hydration particle flashes
+  // for reduced-motion users and keep client hydration deterministic.
+  const [mounted, setMounted] = useState<boolean>(false);
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
   const [bursts, setBursts] = useState<HeartBurst[]>([]);
   const nextBurstIdRef = useRef(1);
   const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   useEffect(() => {
+    setMounted(true);
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return;
     }
@@ -106,7 +108,7 @@ export function LoveEffectsLayer() {
   }, []);
 
   useEffect(() => {
-    if (reducedMotion) {
+    if (!mounted || reducedMotion) {
       setBursts([]);
       return;
     }
@@ -141,7 +143,7 @@ export function LoveEffectsLayer() {
       activeTimers.forEach((timer) => clearTimeout(timer));
       activeTimers.clear();
     };
-  }, [reducedMotion]);
+  }, [mounted, reducedMotion]);
 
   return (
     <div
@@ -151,7 +153,7 @@ export function LoveEffectsLayer() {
       className="pointer-events-none"
     >
       {/* Ambient floating petals & hearts */}
-      {!reducedMotion && (
+      {mounted && !reducedMotion && (
         <div className="pointer-events-none fixed inset-0 z-[5] overflow-hidden">
           {FLOATING_PARTICLES.map((particle) => {
             const style = {
@@ -201,7 +203,7 @@ export function LoveEffectsLayer() {
       )}
 
       {/* Non-blocking tap heart bursts */}
-      {!reducedMotion && bursts.length > 0 && (
+      {mounted && !reducedMotion && bursts.length > 0 && (
         <div className="pointer-events-none fixed inset-0 z-30 overflow-hidden">
           {bursts.map((burst) => (
             <div

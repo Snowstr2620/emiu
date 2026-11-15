@@ -14,12 +14,14 @@ import {
   verifyAdminTokenWithRepo,
   verifyPasscode,
   verifySessionPayload,
+  verifyUserPasswordConstantTime,
   verifyViewerTokenWithRepo,
   VIEWER_STEP1_COOKIE_NAME,
   VIEWER_UNLOCKED_COOKIE_NAME,
   type GuestCooldownTokenPayload,
   type UserSessionTokenPayload,
 } from '@/lib/auth';
+import { buildInitialUsers } from '@/lib/seed-data';
 import { StorageRepository } from '@/lib/storage/types';
 import { AppUser } from '@/types/memories';
 import {
@@ -887,5 +889,62 @@ describe('multi-account & activity payload validation', () => {
     expect('error' in validateCreateUserPayload([])).toBe(true);
     expect('error' in validateUpdateUserPayload([])).toBe(true);
     expect('error' in validateClientActivityPayload([])).toBe(true);
+  });
+
+  test('rejects reserved username "khach" in validateCreateUserPayload', () => {
+    for (const candidate of ['khach', ' KHACH ']) {
+      const res = validateCreateUserPayload({
+        username: candidate,
+        displayName: 'Khách',
+        role: 'viewer',
+        password: 'password123',
+        otpCode: '123456',
+      });
+      expect(res).toEqual({
+        error: 'Tên tài khoản "khach" được hệ thống dành riêng cho khách ghé trang.',
+      });
+    }
+  });
+
+  test('verifyUserPasswordConstantTime rejects users with empty passwordHash and buildInitialUsers validates ADMIN_DEFAULT_OTP', () => {
+    const userWithoutPasswordHash: AppUser = {
+      id: 'user-empty-hash',
+      username: 'broken',
+      displayName: 'Broken',
+      role: 'viewer',
+      passwordHash: '',
+      otpHash: hashPasscode('123456'),
+      otpHint: '',
+      isActive: true,
+      sessionVersion: 1,
+      lastLoginAt: null,
+      createdAt: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+    };
+    expect(verifyUserPasswordConstantTime(null, 'love2026')).toBe(false);
+    expect(verifyUserPasswordConstantTime(userWithoutPasswordHash, '')).toBe(false);
+    expect(
+      verifyUserPasswordConstantTime(userWithoutPasswordHash, 'ny-dummy-constant-time-secret')
+    ).toBe(false);
+
+    const origOtp = process.env.ADMIN_DEFAULT_OTP;
+    try {
+      process.env.ADMIN_DEFAULT_OTP = '12345';
+      expect(() => buildInitialUsers()).toThrow(/ADMIN_DEFAULT_OTP/);
+
+      process.env.ADMIN_DEFAULT_OTP = '12ab56';
+      expect(() => buildInitialUsers()).toThrow(/ADMIN_DEFAULT_OTP/);
+
+      process.env.ADMIN_DEFAULT_OTP = '654321';
+      const seeded = buildInitialUsers();
+      const admin = seeded.find((u) => u.username === 'admin')!;
+      expect(verifyPasscode('654321', admin.otpHash)).toBe(true);
+    } finally {
+      if (origOtp === undefined) {
+        delete process.env.ADMIN_DEFAULT_OTP;
+      } else {
+        process.env.ADMIN_DEFAULT_OTP = origOtp;
+      }
+    }
   });
 });

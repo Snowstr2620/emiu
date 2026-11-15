@@ -27,7 +27,8 @@ function postClientActivity(
     'page_visit' | 'pixel_heart_viewed' | 'music_toggled' | 'memory_viewed' | 'letter_opened'
   >,
   detail: string,
-  metadata?: Record<string, string | number | boolean>
+  metadata?: Record<string, string | number | boolean>,
+  onUnauthorized?: () => void
 ): void {
   try {
     fetch('/api/activity', {
@@ -35,7 +36,13 @@ function postClientActivity(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ eventType, detail, metadata }),
       keepalive: true,
-    }).catch(() => {});
+    })
+      .then((res) => {
+        if (res.status === 401) {
+          onUnauthorized?.();
+        }
+      })
+      .catch(() => {});
   } catch {
     // Never interrupt story experience if telemetry fails
   }
@@ -68,6 +75,8 @@ export function StoryExperience({
   viewerPasscodeEnabled = false,
 }: StoryExperienceProps) {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const { settings, memories } = data;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -82,13 +91,29 @@ export function StoryExperience({
   const currentUserId = currentUser?.id ?? null;
   const visitStorageKey = `ny_visit_logged:${currentUserId ?? 'guest'}`;
 
+  const trackActivity = useCallback(
+    (
+      eventType: Extract<
+        ActivityEventType,
+        'page_visit' | 'pixel_heart_viewed' | 'music_toggled' | 'memory_viewed' | 'letter_opened'
+      >,
+      detail: string,
+      metadata?: Record<string, string | number | boolean>
+    ) => {
+      postClientActivity(eventType, detail, metadata, () => {
+        routerRef.current.refresh();
+      });
+    },
+    []
+  );
+
   useEffect(() => {
     hasSentLeaveRef.current = false;
 
     try {
       if (!window.sessionStorage.getItem(visitStorageKey)) {
         window.sessionStorage.setItem(visitStorageKey, '1');
-        postClientActivity(
+        trackActivity(
           'page_visit',
           currentUserId ? 'Bước vào miền ký ức của tụi mình' : 'Ghé thăm trang kỷ niệm'
         );
@@ -115,7 +140,7 @@ export function StoryExperience({
       window.removeEventListener('pagehide', handleLeave);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [visitStorageKey, currentUserId]);
+  }, [visitStorageKey, currentUserId, trackActivity]);
 
   useEffect(() => {
     if (!showHeartModal) return;
@@ -133,46 +158,49 @@ export function StoryExperience({
   const handleStartJourney = useCallback(() => {
     const timelineEl = document.getElementById('timeline');
     if (timelineEl && typeof timelineEl.scrollIntoView === 'function') {
-      timelineEl.scrollIntoView({ behavior: 'smooth' });
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      timelineEl.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth' });
     }
     if (settings.musicEnabled && settings.musicUrl && !isPlayingRef.current) {
       setIsPlaying(true);
-      postClientActivity('music_toggled', 'Bật giai điệu nền dịu dàng');
+      trackActivity('music_toggled', 'Bật giai điệu nền dịu dàng');
     }
-  }, [settings.musicEnabled, settings.musicUrl]);
+  }, [settings.musicEnabled, settings.musicUrl, trackActivity]);
 
   const handleToggleMusic = useCallback(() => {
     const nextState = !isPlayingRef.current;
     setIsPlaying(nextState);
-    postClientActivity(
+    trackActivity(
       'music_toggled',
       nextState ? 'Bật giai điệu nền dịu dàng' : 'Tạm dừng nhạc nền'
     );
-  }, []);
+  }, [trackActivity]);
 
   const handleOpenPhoto = useCallback(
     (index: number) => {
       setSelectedIndex(index);
       const memory = memories[index];
       if (memory) {
-        postClientActivity(
+        trackActivity(
           'memory_viewed',
           `Ngắm kỷ niệm: ${memory.title || memory.memoryDate}`,
           { memoryId: memory.id, title: memory.title || '' }
         );
       }
     },
-    [memories]
+    [memories, trackActivity]
   );
 
   const handleLetterOpen = useCallback(() => {
-    postClientActivity('letter_opened', 'Mở phong thư tâm sự');
-  }, []);
+    trackActivity('letter_opened', 'Mở phong thư tâm sự');
+  }, [trackActivity]);
 
   const handleOpenHeartReplay = useCallback(() => {
     setShowHeartModal(true);
-    postClientActivity('pixel_heart_viewed', 'Ngắm lại trái tim pixel ngọt ngào');
-  }, []);
+    trackActivity('pixel_heart_viewed', 'Ngắm lại trái tim pixel ngọt ngào');
+  }, [trackActivity]);
 
   const handleLogout = useCallback(async () => {
     if (loggingOut) return;
@@ -193,9 +221,8 @@ export function StoryExperience({
   }, [loggingOut, router, visitStorageKey]);
 
   const roleLabel =
-    currentUser?.role === 'admin'
-      ? 'Anh · Quản trị'
-      : currentUser?.displayName || 'Em bé thương yêu';
+    currentUser?.displayName ||
+    (currentUser?.role === 'admin' ? 'Anh · Quản trị' : 'Em bé thương yêu');
 
   const showLogoutButton = Boolean(currentUser) || Boolean(viewerPasscodeEnabled);
 
@@ -222,7 +249,7 @@ export function StoryExperience({
         <div className="pointer-events-none fixed inset-x-0 top-0 z-40 flex items-start justify-between gap-2 px-3 pt-3 sm:px-6 sm:pt-5">
           <div className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
             {currentUser && (
-              <div className="glass-pill inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-pink-700 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs">
+              <div className="glass-pill inline-flex min-h-[36px] max-w-full items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-pink-700 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs">
                 <Heart className="h-3 w-3 shrink-0 fill-pink-500 text-pink-500 sm:h-3.5 sm:w-3.5" />
                 <span className="max-w-[130px] truncate sm:max-w-[200px]">{roleLabel}</span>
               </div>
@@ -231,7 +258,7 @@ export function StoryExperience({
             {currentUser?.role === 'admin' && (
               <Link
                 href="/admin"
-                className="glass-pill inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-indigo-600 transition hover:border-pink-200 hover:text-pink-600 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
+                className="glass-pill inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:border-pink-200 hover:text-pink-600 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
               >
                 <ShieldCheck className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
                 <span>Quản trị</span>
@@ -242,7 +269,7 @@ export function StoryExperience({
               type="button"
               onClick={handleOpenHeartReplay}
               aria-label="Ngắm lại trái tim pixel"
-              className="glass-pill inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-rose-600 transition hover:border-pink-200 hover:text-pink-700 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
+              className="glass-pill inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-rose-600 transition hover:border-pink-200 hover:text-pink-700 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
             >
               <Sparkles className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
               <span>Trái tim</span>
@@ -253,7 +280,7 @@ export function StoryExperience({
                 type="button"
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="glass-pill inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-rose-200 hover:text-rose-600 disabled:opacity-60 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
+                className="glass-pill inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-rose-200 hover:text-rose-600 disabled:opacity-60 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
               >
                 <LogOut className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
                 <span>Đăng xuất</span>
@@ -311,11 +338,11 @@ export function StoryExperience({
             role="dialog"
             aria-modal="true"
             aria-label="Ngắm lại trái tim pixel"
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-900/60 p-4 backdrop-blur-md sm:items-center"
             onClick={() => setShowHeartModal(false)}
           >
             <div
-              className="relative w-full max-w-md"
+              className="relative my-auto w-full max-w-md"
               onClick={(e) => e.stopPropagation()}
             >
               <button
