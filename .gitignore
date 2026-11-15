@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+.env*.local
+.superpowers/
+data/local-db.json
+public/uploads/*
+!public/uploads/.gitkeep
+*.tsbuildinfo
+next-env.d.ts
