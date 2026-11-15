@@ -21,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className="min-h-screen antialiased text-ink-primary airy-pastel-bg selection:bg-pink-100 selection:text-pink-700">
+      <body className="min-h-screen antialiased bg-[#080306] text-rose-50 airy-pastel-bg godly-velvet-bg selection:bg-rose-500/30 selection:text-rose-100">
         {children}
       </body>
     </html>

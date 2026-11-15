@@ -1,26 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
   <defs>
     <linearGradient id="bg4" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FDF2F8"/>
-      <stop offset="55%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#EFF6FF"/>
+      <stop offset="0%" stop-color="#12050a"/>
+      <stop offset="55%" stop-color="#1f0813"/>
+      <stop offset="100%" stop-color="#0d0408"/>
     </linearGradient>
   </defs>
   <rect width="600" height="800" fill="url(#bg4)"/>
-  <circle cx="150" cy="210" r="110" fill="#FBCFE8" fill-opacity="0.35"/>
-  <circle cx="460" cy="590" r="125" fill="#BAE6FD" fill-opacity="0.38"/>
-  <!-- Glass card & bouquet motif -->
-  <rect x="115" y="160" width="370" height="480" rx="36" fill="#FFFFFF" fill-opacity="0.75" stroke="#FFFFFF" stroke-width="3"/>
-  <!-- Flower petals -->
+  <circle cx="150" cy="210" r="110" fill="#e11d48" fill-opacity="0.24"/>
+  <circle cx="460" cy="590" r="125" fill="#f472b6" fill-opacity="0.22"/>
+  <!-- Dark glass card & crimson bouquet motif -->
+  <rect x="115" y="160" width="370" height="480" rx="36" fill="#240914" fill-opacity="0.78" stroke="#fb7185" stroke-opacity="0.38" stroke-width="2.5"/>
+  <!-- Crimson & rose flower petals -->
   <g transform="translate(300, 355)">
-    <circle cx="0" cy="-42" r="28" fill="#F9A8D4" fill-opacity="0.65"/>
-    <circle cx="40" cy="-12" r="28" fill="#FBCFE8" fill-opacity="0.8"/>
-    <circle cx="24" cy="34" r="28" fill="#DDD6FE" fill-opacity="0.75"/>
-    <circle cx="-24" cy="34" r="28" fill="#BAE6FD" fill-opacity="0.75"/>
-    <circle cx="-40" cy="-12" r="28" fill="#FBCFE8" fill-opacity="0.8"/>
-    <circle cx="0" cy="0" r="22" fill="#FEF08A" fill-opacity="0.9"/>
+    <circle cx="0" cy="-42" r="28" fill="#ef4444" fill-opacity="0.82"/>
+    <circle cx="40" cy="-12" r="28" fill="#fb7185" fill-opacity="0.86"/>
+    <circle cx="24" cy="34" r="28" fill="#f472b6" fill-opacity="0.82"/>
+    <circle cx="-24" cy="34" r="28" fill="#e11d48" fill-opacity="0.84"/>
+    <circle cx="-40" cy="-12" r="28" fill="#fda4af" fill-opacity="0.85"/>
+    <circle cx="0" cy="0" r="22" fill="#ffe4e6" fill-opacity="0.95"/>
   </g>
   <!-- Ribbon lines -->
-  <path d="M220 495 Q300 475 380 495" fill="none" stroke="#EC4899" stroke-opacity="0.45" stroke-width="4" stroke-linecap="round"/>
-  <path d="M250 530 Q300 518 350 530" fill="none" stroke="#6366F1" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/>
+  <path d="M220 495 Q300 475 380 495" fill="none" stroke="#fb7185" stroke-opacity="0.72" stroke-width="4" stroke-linecap="round"/>
+  <path d="M250 530 Q300 518 350 530" fill="none" stroke="#dc2626" stroke-opacity="0.72" stroke-width="3" stroke-linecap="round"/>
 </svg>

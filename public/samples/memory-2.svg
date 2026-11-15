@@ -1,28 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
   <defs>
     <linearGradient id="sky2" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#EFF6FF"/>
-      <stop offset="52%" stop-color="#FDF2F8"/>
-      <stop offset="100%" stop-color="#FDE68A" stop-opacity="0.45"/>
+      <stop offset="0%" stop-color="#12050a"/>
+      <stop offset="52%" stop-color="#240914"/>
+      <stop offset="100%" stop-color="#4c0519"/>
     </linearGradient>
-    <radialGradient id="sun2" cx="50%" cy="38%" r="35%">
-      <stop offset="0%" stop-color="#FDE047" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#FBCFE8" stop-opacity="0"/>
+    <radialGradient id="sun2" cx="50%" cy="38%" r="36%">
+      <stop offset="0%" stop-color="#ffe4e6" stop-opacity="0.65"/>
+      <stop offset="45%" stop-color="#f43f5e" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#e11d48" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <rect width="600" height="800" fill="url(#sky2)"/>
   <rect width="600" height="800" fill="url(#sun2)"/>
-  <!-- Sun disc -->
-  <circle cx="300" cy="300" r="85" fill="#FFFFFF" fill-opacity="0.72"/>
-  <circle cx="300" cy="300" r="64" fill="#FDE68A" fill-opacity="0.6"/>
-  <!-- Soft pastel hills -->
-  <path d="M0 520 Q160 440 320 510 T600 490 L600 800 L0 800 Z" fill="#DBEAFE" fill-opacity="0.72"/>
-  <path d="M0 580 Q190 520 380 585 T600 560 L600 800 L0 800 Z" fill="#FBCFE8" fill-opacity="0.55"/>
-  <!-- Polaroid frame accent -->
-  <rect x="90" y="130" width="420" height="530" rx="28" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-opacity="0.85"/>
-  <!-- Birds / clouds -->
-  <ellipse cx="170" cy="190" rx="56" ry="20" fill="#FFFFFF" fill-opacity="0.7"/>
-  <ellipse cx="435" cy="225" rx="64" ry="22" fill="#FFFFFF" fill-opacity="0.65"/>
-  <path d="M235 660 C231 651, 219 651, 219 661 C219 669, 235 679, 235 679 C235 679, 251 669, 251 661 C251 651, 239 651, 235 660 Z" fill="#EC4899" fill-opacity="0.65"/>
-  <path d="M365 660 C361 651, 349 651, 349 661 C349 669, 365 679, 365 679 C365 679, 381 669, 381 661 C381 651, 369 651, 365 660 Z" fill="#6366F1" fill-opacity="0.55"/>
+  <!-- Crimson-rose sun disc -->
+  <circle cx="300" cy="300" r="85" fill="#fb7185" fill-opacity="0.38"/>
+  <circle cx="300" cy="300" r="64" fill="#ffe4e6" fill-opacity="0.88"/>
+  <!-- Deep ruby-velvet hills -->
+  <path d="M0 520 Q160 440 320 510 T600 490 L600 800 L0 800 Z" fill="#881337" fill-opacity="0.82"/>
+  <path d="M0 580 Q190 520 380 585 T600 560 L600 800 L0 800 Z" fill="#240914" fill-opacity="0.92"/>
+  <!-- Polaroid hairline accent -->
+  <rect x="90" y="130" width="420" height="530" rx="28" fill="none" stroke="#fda4af" stroke-width="2.5" stroke-opacity="0.48"/>
+  <!-- Soft sakura clouds -->
+  <ellipse cx="170" cy="190" rx="56" ry="20" fill="#fb7185" fill-opacity="0.25"/>
+  <ellipse cx="435" cy="225" rx="64" ry="22" fill="#f472b6" fill-opacity="0.24"/>
+  <!-- Twin hearts -->
+  <path d="M235 660 C231 651, 219 651, 219 661 C219 669, 235 679, 235 679 C235 679, 251 669, 251 661 C251 651, 239 651, 235 660 Z" fill="#ef4444" fill-opacity="0.9"/>
+  <path d="M365 660 C361 651, 349 651, 349 661 C349 669, 365 679, 365 679 C365 679, 381 669, 381 661 C381 651, 369 651, 365 660 Z" fill="#f472b6" fill-opacity="0.88"/>
 </svg>

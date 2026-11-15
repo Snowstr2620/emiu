@@ -387,6 +387,87 @@ describe('StoryExperience UI components', () => {
     rerender(<StoryExperience data={SAMPLE_DATA} currentUser={VIEWER_USER} />);
     expect(getActivityCalls(fetchSpy).filter((c) => c.eventType === 'page_visit')).toHaveLength(1);
   });
+
+  test('renders Godly Bento showcase (#01/#02 badges, lg:col-span-7/lg:col-span-5 spans, Hero metrics) and switches between Bento and Dòng chảy without blue/purple classes', async () => {
+    const user = userEvent.setup();
+    const fourMemoriesData: PublicSiteData = {
+      ...SAMPLE_DATA,
+      memories: [
+        ...SAMPLE_DATA.memories,
+        {
+          id: 'mem-3',
+          memoryDate: '2025-05-01',
+          title: 'Đêm biển lộng gió',
+          story: 'Ánh trăng soi sóng vỗ dịu dàng.',
+          imageUrl: '/samples/memory-3.svg',
+          imageAlt: 'Biển đêm',
+          sortOrder: 2,
+          createdAt: '2026-11-15T00:00:00.000Z',
+        },
+        {
+          id: 'mem-4',
+          memoryDate: '2025-08-20',
+          title: 'Bó hoa hồng nhung',
+          story: 'Mùi hương ngọt ngào còn vương trên áo.',
+          imageUrl: '/samples/memory-4.svg',
+          imageAlt: 'Bó hoa',
+          sortOrder: 3,
+          createdAt: '2026-11-15T00:00:00.000Z',
+        },
+      ],
+    };
+
+    const { container, rerender } = render(
+      <StoryExperience data={fourMemoriesData} currentUser={ADMIN_USER} viewerPasscodeEnabled />
+    );
+
+    // Hero Bento secondary metric tile
+    expect(screen.getByText(/KHO LƯU TRỮ KỶ NIỆM/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 khoảnh khắc quý giá/i)).toBeInTheDocument();
+
+    // Bento switcher defaults to Bento active
+    const bentoBtn = screen.getByRole('button', { name: 'Bento' });
+    const streamBtn = screen.getByRole('button', { name: 'Dòng chảy' });
+    expect(bentoBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(bentoBtn).toHaveClass('min-h-[36px]');
+    expect(streamBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(streamBtn).toHaveClass('min-h-[36px]');
+
+    // Editorial #01..#04 badges and 7-5-5-7 asymmetric col-span pattern
+    const card1 = screen.getByText('#01').closest('article');
+    const card2 = screen.getByText('#02').closest('article');
+    const card3 = screen.getByText('#03').closest('article');
+    const card4 = screen.getByText('#04').closest('article');
+    expect(card1).toHaveClass('lg:col-span-7');
+    expect(card2).toHaveClass('lg:col-span-5');
+    expect(card3).toHaveClass('lg:col-span-5');
+    expect(card4).toHaveClass('lg:col-span-7');
+    expect(card1?.parentElement).toHaveClass('lg:grid-cols-12');
+
+    // Switch to Dòng chảy (1-column stream)
+    await user.click(streamBtn);
+    expect(streamBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(bentoBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('#01').closest('article')).not.toHaveClass('lg:col-span-7');
+    expect(screen.getByText('#01').closest('article')?.parentElement).toHaveClass('max-w-3xl', 'space-y-8');
+
+    // Switch back to Bento
+    await user.click(bentoBtn);
+    expect(bentoBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('#01').closest('article')).toHaveClass('lg:col-span-7');
+
+    // Zero blue/sky/indigo/violet/purple utility classes in rendered StoryExperience
+    expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
+
+    // Single-memory Bento spans full 12 columns centered
+    rerender(
+      <StoryExperience
+        data={{ settings: SAMPLE_DATA.settings, memories: [SAMPLE_DATA.memories[0]] }}
+        currentUser={VIEWER_USER}
+      />
+    );
+    expect(screen.getByText('#01').closest('article')).toHaveClass('lg:col-span-12');
+  });
 });
 
 describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest telemetry', () => {
@@ -635,6 +716,13 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
     fireEvent(window, new Event('pagehide'));
     expect(sendBeaconMock).not.toHaveBeenCalled();
   });
+
+  test('ViewerPasscodeGate renders purely in Dark Velvet & Crimson-Rose without blue or purple classes', () => {
+    const { container } = render(
+      <ViewerPasscodeGate coupleTitle="Minh & Lan" showDevDefaultHints={true} />
+    );
+    expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
+  });
 });
 
 describe('PixelHeartIntro canvas & reduced motion', () => {
@@ -700,6 +788,48 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
     expect(rafSpy).not.toHaveBeenCalled();
     expect(ctxStub.fill).toHaveBeenCalled();
   });
+
+  test('uses pure crimson and rose-pink palette in canvas pixels, sparkles, and CTA without purple/lavender hexes', () => {
+    mockMatchMediaReducedMotion(false);
+    const assignedColors: string[] = [];
+    let currentFillStyle = '';
+    const ctxStub = createCanvas2dContextStub();
+    Object.defineProperty(ctxStub, 'fillStyle', {
+      get: () => currentFillStyle,
+      set: (value: string) => {
+        currentFillStyle = value;
+        if (typeof value === 'string') {
+          assignedColors.push(value.toLowerCase());
+        }
+      },
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      ctxStub as unknown as RenderingContext
+    );
+
+    const rafCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+
+    const { container } = render(<PixelHeartIntro coupleTitle="Anh & Em" onEnterStory={vi.fn()} />);
+
+    // Advance animation past assemblyDurationMs (1150ms) so ambient sparkles also draw
+    act(() => {
+      rafCallbacks[0]?.(0);
+      rafCallbacks[rafCallbacks.length - 1]?.(1300);
+    });
+
+    const forbiddenHexes = ['#c4b5fd', '#e879f9', '#ddd6fe', '#e9d5ff', '#93c5fd', '#6366f1'];
+    for (const hex of forbiddenHexes) {
+      expect(assignedColors).not.toContain(hex);
+    }
+    expect(assignedColors).toContain('#dc2626');
+    expect(assignedColors).toContain('#ec4899');
+    expect(assignedColors).toContain('#ef4444');
+    expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
+  });
 });
 
 describe('LoveEffectsLayer ambient effects & reduced motion', () => {
@@ -753,5 +883,20 @@ describe('LoveEffectsLayer ambient effects & reduced motion', () => {
   test('renders zero ambient particles during SSR before client mount', () => {
     const ssrHtml = renderToStaticMarkup(<LoveEffectsLayer />);
     expect(ssrHtml).not.toContain('data-love-particle');
+  });
+
+  test('uses exclusively crimson and rose-pink shades for floating particles and tap bursts without purple/lavender hexes', () => {
+    mockMatchMediaReducedMotion(false);
+    const { container } = render(<LoveEffectsLayer />);
+
+    fireEvent.pointerDown(document.body, { clientX: 160, clientY: 220 });
+
+    const htmlLower = container.innerHTML.toLowerCase();
+    const forbiddenHexes = ['#c4b5fd', '#e879f9', '#ddd6fe', '#e9d5ff', '#93c5fd', '#6366f1'];
+    for (const hex of forbiddenHexes) {
+      expect(htmlLower).not.toContain(hex);
+    }
+    expect(htmlLower).toContain('#ef4444');
+    expect(htmlLower).toContain('#fb7185');
   });
 });

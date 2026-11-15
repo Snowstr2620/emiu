@@ -41,29 +41,49 @@ export function PhotoLightbox({
   if (!memory || selectedIndex === null) return null;
 
   const hasMultiple = memories.length > 1;
+  const counterLabel = `#${String(selectedIndex + 1).padStart(2, '0')} / ${String(
+    memories.length
+  ).padStart(2, '0')}`;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={memory.title || 'Xem ảnh kỷ niệm'}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 backdrop-blur-md sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#050203]/88 p-4 backdrop-blur-lg sm:p-6"
       onClick={onClose}
     >
       <div
         className="glass-card relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl p-4 sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Đóng xem ảnh"
-          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-sm transition hover:bg-pink-50 hover:text-pink-600"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-950/60 px-3 py-1 text-xs font-semibold tracking-wider text-rose-200">
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]"
+              />
+              {counterLabel}
+            </span>
+            {hasMultiple && (
+              <span className="hidden text-[11px] font-medium tracking-wider text-rose-300/70 sm:inline">
+                ← · → · ESC
+              </span>
+            )}
+          </div>
 
-        <div className="relative flex min-h-[160px] max-h-[48vh] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/60 p-2 sm:min-h-[200px] sm:max-h-[56vh]">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Đóng xem ảnh"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-rose-500/30 bg-[#190911]/90 text-rose-200 shadow-sm transition hover:border-rose-400/60 hover:bg-rose-950/90 hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="relative flex min-h-[160px] max-h-[48vh] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-rose-500/20 bg-[#0b0408]/95 p-2 sm:min-h-[200px] sm:max-h-[56vh]">
           {hasMultiple && (
             <button
               type="button"
@@ -71,7 +91,7 @@ export function PhotoLightbox({
                 onSelectIndex((selectedIndex - 1 + memories.length) % memories.length)
               }
               aria-label="Ảnh trước"
-              className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-sm transition hover:bg-pink-50 hover:text-pink-600"
+              className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-rose-500/35 bg-[#190911]/90 text-rose-100 shadow-[0_0_20px_rgba(225,29,72,0.28)] transition hover:border-rose-400 hover:bg-rose-950/90 hover:text-white"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -89,7 +109,7 @@ export function PhotoLightbox({
               type="button"
               onClick={() => onSelectIndex((selectedIndex + 1) % memories.length)}
               aria-label="Ảnh tiếp theo"
-              className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-sm transition hover:bg-pink-50 hover:text-pink-600"
+              className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-rose-500/35 bg-[#190911]/90 text-rose-100 shadow-[0_0_20px_rgba(225,29,72,0.28)] transition hover:border-rose-400 hover:bg-rose-950/90 hover:text-white"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -98,22 +118,22 @@ export function PhotoLightbox({
 
         <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
-              <Heart className="h-3 w-3 fill-pink-500 text-pink-500" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/25 bg-rose-950/60 px-3 py-1 text-xs font-semibold text-rose-200">
+              <Heart className="h-3 w-3 fill-rose-500 text-rose-500" />
               {formatMemoryLongDateVi(memory.memoryDate)}
             </span>
             {hasMultiple && (
-              <span className="text-xs font-medium text-slate-500">
+              <span className="text-xs font-medium text-rose-300/75">
                 Khoảnh khắc {selectedIndex + 1} / {memories.length}
               </span>
             )}
           </div>
           {memory.title && (
-            <h3 className="mt-2.5 break-words [overflow-wrap:anywhere] font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+            <h3 className="mt-2.5 break-words [overflow-wrap:anywhere] font-serif text-xl font-bold text-rose-50 sm:text-2xl">
               {memory.title}
             </h3>
           )}
-          <p className="mt-1.5 whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-slate-600 sm:text-base">
+          <p className="mt-1.5 whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-rose-200/85 sm:text-base">
             {memory.story}
           </p>
         </div>
