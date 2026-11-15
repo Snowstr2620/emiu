@@ -241,10 +241,12 @@ describe('StoryExperience UI components', () => {
     expect(adminLink).toHaveAttribute('href', '/admin');
     expect(screen.getByRole('button', { name: /Bật nhạc nền/i })).toBeInTheDocument();
 
-    // Music toggle telemetry
+    // Music toggle telemetry + reduced-motion safety on pulse icon
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
     await user.click(screen.getByRole('button', { name: /Bật nhạc nền/i }));
+    const pauseMusicBtn = screen.getByRole('button', { name: /Tạm dừng nhạc nền/i });
+    expect(pauseMusicBtn.querySelector('svg')).toHaveClass('motion-reduce:animate-none');
     expect(getActivityCalls(fetchSpy)).toContainEqual(
       expect.objectContaining({ eventType: 'music_toggled' })
     );
@@ -252,7 +254,10 @@ describe('StoryExperience UI components', () => {
     // Replay Pixel Heart modal + Escape close
     await user.click(screen.getByRole('button', { name: /Ngắm lại trái tim pixel/i }));
     const heartDialog = await screen.findByRole('dialog');
-    expect(heartDialog.querySelector('canvas')).toBeInTheDocument();
+    const replayCanvas = within(heartDialog).getByRole('img', {
+      name: /Trái tim pixel đang ghép nối và đập nhịp yêu thương/i,
+    });
+    expect(replayCanvas.tagName).toBe('CANVAS');
     expect(getActivityCalls(fetchSpy)).toContainEqual(
       expect.objectContaining({ eventType: 'pixel_heart_viewed' })
     );
@@ -414,9 +419,9 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
     });
   });
 
-  test('supports initialStage="otp_pending" and returning to Step 1', async () => {
+  test('supports initialStage="otp_pending" and returning to Step 1 calls /api/viewer/logout and clears password & OTP', async () => {
     const user = userEvent.setup();
-    render(
+    const { unmount } = render(
       <ViewerPasscodeGate
         coupleTitle="Minh & Lan"
         initialStage="otp_pending"
@@ -431,7 +436,37 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
     expect(screen.getByLabelText('Chữ số OTP thứ 1')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Quay lại bước 1/i }));
-    expect(screen.getByLabelText(/Tài khoản của mình/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/viewer/logout',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+    const passwordEl = await screen.findByLabelText(/Mật khẩu yêu thương/i);
+    expect(passwordEl).toHaveValue('');
+    unmount();
+
+    // Regression: full Step 1 -> Step 2 -> Back to Step 1 clears entered password and logs out Step 1 session
+    fetchSpy.mockClear();
+    window.sessionStorage.clear();
+    render(<ViewerPasscodeGate coupleTitle="Minh & Lan" showDevDefaultHints={false} />);
+
+    await user.type(screen.getByLabelText(/Tài khoản của mình/i), 'nguoithuong');
+    await user.type(screen.getByLabelText(/Mật khẩu yêu thương/i), 'love2026');
+    await user.click(screen.getByRole('button', { name: /Tiếp tục đến bước OTP/i }));
+
+    expect(await screen.findByLabelText('Chữ số OTP thứ 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Quay lại bước 1/i }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/viewer/logout',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+    const returnedPasswordInput = await screen.findByLabelText(/Mật khẩu yêu thương/i);
+    expect(returnedPasswordInput).toHaveValue('');
   });
 
   test('supports typing individual OTP digits with auto-focus, Backspace stepping back, and Arrow key navigation', async () => {
@@ -527,11 +562,19 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
         coupleTitle="Anh & Em"
         displayName="Em bé thương yêu"
         onEnterStory={onEnterStory}
+        isModalReplay
       />
     );
 
-    expect(document.querySelector('canvas')).toBeInTheDocument();
+    const canvas = screen.getByRole('img', {
+      name: /Trái tim pixel đang ghép nối và đập nhịp yêu thương/i,
+    });
+    expect(canvas.tagName).toBe('CANVAS');
     expect(screen.getByText(/Em bé thương yêu/)).toBeInTheDocument();
+    expect(canvas.closest('.glass-card')).toHaveClass('pt-10');
+    expect(screen.getByText(/Dành riêng cho Em bé thương yêu/).parentElement).toHaveClass(
+      'max-w-[74%]'
+    );
 
     await user.click(
       screen.getByRole('button', { name: /Mở khóa miền ký ức của tụi mình/i })

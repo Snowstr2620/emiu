@@ -139,6 +139,7 @@ export function ViewerPasscodeGate({
       }
 
       setUsername(payload.user?.username || normalizedUsername);
+      setPassword('');
       setDisplayName(payload.user?.displayName || normalizedUsername);
       setOtpHint(payload.otpHint ?? payload.user?.otpHint ?? '');
       setOtpDigits([...EMPTY_OTP]);
@@ -150,6 +151,22 @@ export function ViewerPasscodeGate({
     } catch {
       setError('Không thể kết nối máy chủ lúc này, mình thử lại nhé.');
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBackToStep1() {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await fetch('/api/viewer/logout', { method: 'POST' }).catch(() => {});
+    } finally {
+      setPassword('');
+      setOtpDigits([...EMPTY_OTP]);
+      setOtpHint('');
+      setDisplayName('');
+      setError('');
+      setStep('credentials');
       setLoading(false);
     }
   }
@@ -398,7 +415,7 @@ export function ViewerPasscodeGate({
                     />
                   </div>
 
-                  {showDevDefaultHints && (
+                  {process.env.NODE_ENV !== 'production' && showDevDefaultHints && (
                     <div className="rounded-2xl border border-pink-100 bg-pink-50/60 p-3 text-xs text-slate-600">
                       <p className="mb-2 font-semibold text-pink-700">
                         Gợi ý nhanh (Môi trường dev):
@@ -505,12 +522,9 @@ export function ViewerPasscodeGate({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setStep('credentials');
-                        setOtpDigits([...EMPTY_OTP]);
-                        setError('');
-                      }}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white/75 px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:border-pink-200 hover:text-pink-600"
+                      disabled={loading}
+                      onClick={handleBackToStep1}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white/75 px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:border-pink-200 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-55"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
                       <span>Quay lại bước 1</span>

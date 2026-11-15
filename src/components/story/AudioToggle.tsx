@@ -58,7 +58,7 @@ export function AudioToggle({
       >
         {isPlaying ? (
           <>
-            <Volume2 className="h-3 w-3 text-pink-500 animate-pulse sm:h-4 sm:w-4" />
+            <Volume2 className="h-3 w-3 text-pink-500 animate-pulse motion-reduce:animate-none sm:h-4 sm:w-4" />
             <span>Đang phát nhạc</span>
           </>
         ) : (

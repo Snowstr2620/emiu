@@ -336,8 +336,16 @@ export function PixelHeartIntro({
   const greetingName = displayName?.trim() || 'người thương';
 
   return (
-    <div className="glass-card relative mx-auto w-full max-w-md overflow-hidden rounded-3xl px-5 py-7 text-center sm:px-8 sm:py-9">
-      <div className="mx-auto inline-flex max-w-[82%] items-center gap-1.5 rounded-full bg-pink-50/90 px-3.5 py-1 text-xs font-semibold text-pink-600 shadow-sm">
+    <div
+      className={`glass-card relative mx-auto w-full max-w-md overflow-hidden rounded-3xl px-5 pb-7 text-center sm:px-8 sm:pb-9 ${
+        isModalReplay ? 'pt-10 sm:pt-6' : 'pt-7 sm:pt-9'
+      }`}
+    >
+      <div
+        className={`mx-auto inline-flex items-center gap-1.5 rounded-full bg-pink-50/90 px-3.5 py-1 text-xs font-semibold text-pink-600 shadow-sm ${
+          isModalReplay ? 'max-w-[74%]' : 'max-w-[82%]'
+        }`}
+      >
         <Sparkles className="h-3.5 w-3.5 shrink-0 text-pink-500" />
         <span className="truncate">
           {isModalReplay ? `Dành riêng cho ${greetingName}` : `Thương chào ${greetingName}`}
@@ -357,6 +365,7 @@ export function PixelHeartIntro({
       <div className="my-4 flex items-center justify-center">
         <canvas
           ref={canvasRef}
+          role="img"
           aria-label="Trái tim pixel đang ghép nối và đập nhịp yêu thương"
           className="h-[220px] w-[240px] sm:h-[296px] sm:w-[320px]"
         />
