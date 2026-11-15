@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseStorageRepository } from '@/lib/storage/supabase-repository';
@@ -6,6 +7,8 @@ import { createInitialSeedData } from '@/lib/seed-data';
 function createMockSupabaseClient(options?: {
   initialSettingsRow?: Record<string, unknown> | null;
   initialMemoryRows?: Record<string, unknown>[];
+  initialUserRows?: Record<string, unknown>[];
+  initialActivityRows?: Record<string, unknown>[];
   failSeedMemoriesError?: string | null;
   failReorderOnIndex?: number | null;
 }) {
@@ -22,8 +25,8 @@ function createMockSupabaseClient(options?: {
           letter_title: seed.settings.letterTitle,
           letter_body: seed.settings.letterBody,
           letter_signature: seed.settings.letterSignature,
-          viewer_passcode_enabled: false,
-          viewer_passcode_hash: 'salt:expectedhash',
+          viewer_passcode_enabled: true,
+          viewer_passcode_hash: '',
           updated_at: seed.settings.updatedAt,
         }
       : options.initialSettingsRow;
@@ -41,9 +44,75 @@ function createMockSupabaseClient(options?: {
       created_at: m.createdAt,
     }));
 
+  let userRows: Record<string, unknown>[] =
+    options?.initialUserRows ??
+    seed.users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      display_name: u.displayName,
+      role: u.role,
+      password_hash: u.passwordHash,
+      otp_hash: u.otpHash,
+      otp_hint: u.otpHint,
+      is_active: u.isActive,
+      session_version: u.sessionVersion,
+      last_login_at: u.lastLoginAt,
+      created_at: u.createdAt,
+      updated_at: u.updatedAt,
+    }));
+
+  let activityRows: Record<string, unknown>[] = options?.initialActivityRows ?? [];
+
   const calls: string[] = [];
   const removedPaths: string[][] = [];
   let updateCallCount = 0;
+
+  function makeSelectFilterBuilder(rowsGetter: () => Record<string, unknown>[]) {
+    const filters: Array<{ col: string; val: unknown }> = [];
+    let orderCol: string | null = null;
+    let orderAsc = true;
+    let limitCount: number | null = null;
+
+    const execute = () => {
+      let result = [...rowsGetter()].filter((row) =>
+        filters.every((f) => row[f.col] === f.val)
+      );
+      if (orderCol) {
+        const col = orderCol;
+        result.sort((a, b) => {
+          const av = String(a[col] ?? '');
+          const bv = String(b[col] ?? '');
+          return orderAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+      }
+      if (limitCount !== null) {
+        result = result.slice(0, limitCount);
+      }
+      return result;
+    };
+
+    const builder = {
+      eq(col: string, val: unknown) {
+        filters.push({ col, val });
+        return builder;
+      },
+      order(col: string, opts?: { ascending?: boolean }) {
+        orderCol = col;
+        orderAsc = opts?.ascending ?? true;
+        return builder;
+      },
+      limit(count: number) {
+        limitCount = count;
+        return builder;
+      },
+      maybeSingle: async () => ({ data: execute()[0] ?? null, error: null }),
+      returns: async () => ({ data: execute(), error: null }),
+      then(resolve: (value: { data: Record<string, unknown>[]; error: null }) => void) {
+        resolve({ data: execute(), error: null });
+      },
+    };
+    return builder;
+  }
 
   const client = {
     from(table: string) {
@@ -66,6 +135,16 @@ function createMockSupabaseClient(options?: {
                 return {
                   single: async () => ({ data: settingsRow, error: null }),
                 };
+              },
+            };
+          },
+          update(patch: Record<string, unknown>) {
+            return {
+              eq: async () => {
+                if (settingsRow) {
+                  settingsRow = { ...settingsRow, ...patch };
+                }
+                return { error: null };
               },
             };
           },
@@ -125,6 +204,104 @@ function createMockSupabaseClient(options?: {
         };
       }
 
+      if (table === 'app_users') {
+        return {
+          select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+            if (opts?.head) {
+              return Promise.resolve({ count: userRows.length, error: null });
+            }
+            return makeSelectFilterBuilder(() => userRows);
+          },
+          upsert: async (
+            rows: Record<string, unknown>[],
+            opts?: { onConflict?: string; ignoreDuplicates?: boolean }
+          ) => {
+            calls.push(
+              `app_users.upsert:${opts?.onConflict || ''}:${Boolean(opts?.ignoreDuplicates)}`
+            );
+            for (const row of rows) {
+              const exists = userRows.some((u) => u.username === row.username);
+              if (!exists || !opts?.ignoreDuplicates) {
+                userRows.push({ ...row });
+              }
+            }
+            return { error: null };
+          },
+          insert(row: Record<string, unknown>) {
+            const inserted = {
+              id: row.id || crypto.randomUUID(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              last_login_at: null,
+              ...row,
+            };
+            userRows.push(inserted);
+            return {
+              select() {
+                return {
+                  single: async () => ({ data: inserted, error: null }),
+                };
+              },
+            };
+          },
+          update(patch: Record<string, unknown>) {
+            return {
+              eq(col: string, val: unknown) {
+                let updatedRow: Record<string, unknown> | null = null;
+                userRows = userRows.map((row) => {
+                  if (row[col] === val) {
+                    updatedRow = { ...row, ...patch };
+                    return updatedRow;
+                  }
+                  return row;
+                });
+                return {
+                  select() {
+                    return {
+                      single: async () => ({ data: updatedRow, error: null }),
+                    };
+                  },
+                  then(resolve: (res: { error: null }) => void) {
+                    resolve({ error: null });
+                  },
+                };
+              },
+            };
+          },
+          delete() {
+            return {
+              eq: async (col: string, val: unknown) => {
+                userRows = userRows.filter((r) => r[col] !== val);
+                return { error: null };
+              },
+            };
+          },
+        };
+      }
+
+      if (table === 'activity_logs') {
+        return {
+          select() {
+            return makeSelectFilterBuilder(() => activityRows);
+          },
+          insert(row: Record<string, unknown>) {
+            const inserted = {
+              id: row.id || crypto.randomUUID(),
+              created_at: new Date().toISOString(),
+              ...row,
+            };
+            activityRows.unshift(inserted);
+            return {
+              select() {
+                return {
+                  single: async () => ({ data: inserted, error: null }),
+                };
+              },
+            };
+          },
+        };
+      }
+
       throw new Error(`Unexpected table ${table}`);
     },
     storage: {
@@ -156,10 +333,11 @@ function createMockSupabaseClient(options?: {
 }
 
 describe('SupabaseStorageRepository', () => {
-  test('seeds cold start idempotently with upsert ignoreDuplicates and throws on seed insert error', async () => {
+  test('seeds cold start idempotently (settings, memories, app_users) and throws on seed insert error', async () => {
     const okMock = createMockSupabaseClient({
       initialSettingsRow: null,
       initialMemoryRows: [],
+      initialUserRows: [],
     });
     const repo = new SupabaseStorageRepository({
       client: okMock.client,
@@ -169,16 +347,21 @@ describe('SupabaseStorageRepository', () => {
 
     const pub = await repo.getPublicData();
     expect(pub.memories).toHaveLength(4);
+    expect(pub.settings.viewerPasscodeEnabled).toBe(true);
     expect('viewerPasscodeHash' in pub.settings).toBe(false);
     expect(okMock.calls).toContain('memories.upsert:id:true');
+    expect(okMock.calls).toContain('app_users.upsert:username:true');
 
     const admin = await repo.getAdminData();
     expect(admin.settings.hasViewerPasscode).toBe(false);
     expect('viewerPasscodeHash' in admin.settings).toBe(false);
+    expect(admin.users).toHaveLength(2);
+    expect(admin.trafficSummary.activeUsersCount).toBe(2);
 
     const errMock = createMockSupabaseClient({
       initialSettingsRow: null,
       initialMemoryRows: [],
+      initialUserRows: [],
       failSeedMemoriesError: 'duplicate key value',
     });
     const failingRepo = new SupabaseStorageRepository({
@@ -203,7 +386,7 @@ describe('SupabaseStorageRepository', () => {
     ).rejects.toThrow();
   });
 
-  test('rejects enabling viewerPasscodeEnabled without an existing or new passcode', async () => {
+  test('allows enabling viewerPasscodeEnabled without legacy passcode because auth uses app_users', async () => {
     const mock = createMockSupabaseClient({
       initialSettingsRow: {
         id: 1,
@@ -226,19 +409,66 @@ describe('SupabaseStorageRepository', () => {
       bucket: 'love-memories',
     });
 
-    await expect(
-      repo.updateSettings({
-        coupleTitle: 'Minh & Lan',
-        heroSubtitle: 'Subtitle',
-        loveStartDate: '2024-10-12',
-        musicUrl: '/samples/gentle-memories.wav',
-        musicEnabled: true,
-        letterTitle: 'Gửi em',
-        letterBody: 'Nội dung thư.',
-        letterSignature: 'Minh',
-        viewerPasscodeEnabled: true,
-      })
-    ).rejects.toThrow();
+    const updated = await repo.updateSettings({
+      coupleTitle: 'Minh & Lan',
+      heroSubtitle: 'Subtitle',
+      loveStartDate: '2024-10-12',
+      musicUrl: '/samples/gentle-memories.wav',
+      musicEnabled: true,
+      letterTitle: 'Gửi em',
+      letterBody: 'Nội dung thư.',
+      letterSignature: 'Minh',
+      viewerPasscodeEnabled: true,
+    });
+    expect(updated.viewerPasscodeEnabled).toBe(true);
+  });
+
+  test('supports user CRUD, active-admin guard, and activity logging on Supabase repository', async () => {
+    const mock = createMockSupabaseClient({ initialUserRows: [], initialActivityRows: [] });
+    const repo = new SupabaseStorageRepository({
+      client: mock.client,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+
+    // Cold fetch seeds default users
+    await repo.getPublicData();
+    const users = await repo.listUsers();
+    expect(users).toHaveLength(2);
+    const onlyAdmin = users.find((u) => u.username === 'admin')!;
+
+    await expect(repo.updateUser(onlyAdmin.id, { isActive: false })).rejects.toThrow(
+      /quản trị hoạt động cuối cùng/
+    );
+    await expect(repo.deleteUser(onlyAdmin.id)).rejects.toThrow(/quản trị hoạt động cuối cùng/);
+
+    const created = await repo.createUser({
+      username: 'ban.nho',
+      displayName: 'Bạn nhỏ',
+      role: 'viewer',
+      password: 'password123',
+      otpCode: '123456',
+      otpHint: 'Gợi ý',
+      isActive: true,
+    });
+    expect(created.username).toBe('ban.nho');
+
+    const updated = await repo.updateUser(created.id, { revokeSession: true });
+    expect(updated?.sessionVersion).toBe(2);
+
+    await repo.recordActivity({
+      userId: created.id,
+      username: created.username,
+      userRole: 'viewer',
+      eventType: 'memory_viewed',
+      detail: 'Xem kỷ niệm đầu tiên',
+      deviceSummary: 'Safari · iPhone',
+      metadata: { memoryId: 'm1' },
+    });
+
+    const logs = await repo.listActivityLogs({ eventType: 'memory_viewed', search: 'đầu tiên' });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].username).toBe('ban.nho');
   });
 
   test('protects /samples/ URLs and strips bucket path cleanly when deleting stored Supabase media', async () => {

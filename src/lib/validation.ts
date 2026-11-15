@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { parseIsoDateParts } from '@/lib/date-utils';
+import type { ActivityEventType, UserRole } from '@/types/memories';
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_AUDIO_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -226,6 +227,278 @@ export function validateSettingsPayload(
       letterSignature: letterSignature.slice(0, 120),
       viewerPasscodeEnabled,
       viewerPasscode: viewerPasscode && viewerPasscode.length > 0 ? viewerPasscode : undefined,
+    },
+  };
+}
+
+const USERNAME_REGEX = /^[a-z0-9._-]{3,32}$/;
+const OTP_REGEX = /^\d{6}$/;
+
+function parseRole(rawRole: unknown): UserRole | null {
+  if (rawRole === 'admin' || rawRole === 'viewer') return rawRole;
+  return null;
+}
+
+export interface ValidatedUserLoginPayload {
+  username: string;
+  password: string;
+}
+
+export function validateUserLoginPayload(
+  raw: unknown,
+  options?: { defaultUsername?: string }
+): { data: ValidatedUserLoginPayload } | { error: string } {
+  if (!raw || typeof raw !== 'object') {
+    return { error: 'Dữ liệu đăng nhập không hợp lệ.' };
+  }
+
+  const r = raw as Record<string, unknown>;
+  const rawUsername = typeof r.username === 'string' ? r.username.trim().toLowerCase() : '';
+  const username =
+    !rawUsername && options?.defaultUsername
+      ? options.defaultUsername.trim().toLowerCase()
+      : rawUsername;
+  const password = typeof r.password === 'string' ? r.password : '';
+
+  if (!USERNAME_REGEX.test(username)) {
+    return { error: 'Tên đăng nhập gồm 3–32 ký tự chữ thường, số hoặc dấu . _ -.' };
+  }
+  if (!password.trim() || password.length < 4 || password.length > 128) {
+    return { error: 'Mật khẩu cần từ 4 đến 128 ký tự.' };
+  }
+
+  return { data: { username, password } };
+}
+
+export interface ValidatedOtpVerifyPayload {
+  otp: string;
+}
+
+export function validateOtpVerifyPayload(
+  raw: unknown
+): { data: ValidatedOtpVerifyPayload } | { error: string } {
+  if (!raw || typeof raw !== 'object') {
+    return { error: 'Dữ liệu xác thực OTP không hợp lệ.' };
+  }
+  const r = raw as Record<string, unknown>;
+  const otp = typeof r.otp === 'string' ? r.otp.trim() : '';
+
+  if (!OTP_REGEX.test(otp)) {
+    return { error: 'Mã OTP phải gồm đúng 6 chữ số.' };
+  }
+
+  return { data: { otp } };
+}
+
+export interface ValidatedCreateUserPayload {
+  username: string;
+  displayName: string;
+  role: UserRole;
+  password: string;
+  otpCode: string;
+  otpHint: string;
+  isActive: boolean;
+}
+
+export function validateCreateUserPayload(
+  raw: unknown
+): { data: ValidatedCreateUserPayload } | { error: string } {
+  if (!raw || typeof raw !== 'object') {
+    return { error: 'Dữ liệu tài khoản không hợp lệ.' };
+  }
+  const r = raw as Record<string, unknown>;
+  const username = typeof r.username === 'string' ? r.username.trim().toLowerCase() : '';
+  const displayName = typeof r.displayName === 'string' ? r.displayName.trim() : '';
+  const role = parseRole(r.role);
+  const password = typeof r.password === 'string' ? r.password : '';
+  const otpCode = typeof r.otpCode === 'string' ? r.otpCode.trim() : '';
+  const otpHint = typeof r.otpHint === 'string' ? r.otpHint.trim() : '';
+  const isActive = typeof r.isActive === 'boolean' ? r.isActive : true;
+
+  if (!USERNAME_REGEX.test(username)) {
+    return { error: 'Tên đăng nhập gồm 3–32 ký tự chữ thường, số hoặc dấu . _ -.' };
+  }
+  if (!displayName || displayName.length > 60) {
+    return { error: 'Tên hiển thị cần từ 1 đến 60 ký tự.' };
+  }
+  if (!role) {
+    return { error: 'Vai trò tài khoản không hợp lệ.' };
+  }
+  if (!password.trim() || password.length < 6 || password.length > 128) {
+    return { error: 'Mật khẩu mới cần từ 6 đến 128 ký tự.' };
+  }
+  if (!OTP_REGEX.test(otpCode)) {
+    return { error: 'Mã OTP phải gồm đúng 6 chữ số.' };
+  }
+
+  return {
+    data: {
+      username,
+      displayName,
+      role,
+      password,
+      otpCode,
+      otpHint: otpHint.slice(0, 120),
+      isActive,
+    },
+  };
+}
+
+export interface ValidatedUpdateUserPayload {
+  displayName?: string;
+  role?: UserRole;
+  password?: string;
+  otpCode?: string;
+  otpHint?: string;
+  isActive?: boolean;
+  revokeSession?: boolean;
+}
+
+export function validateUpdateUserPayload(
+  raw: unknown
+): { data: ValidatedUpdateUserPayload } | { error: string } {
+  if (!raw || typeof raw !== 'object') {
+    return { error: 'Dữ liệu cập nhật tài khoản không hợp lệ.' };
+  }
+  const r = raw as Record<string, unknown>;
+  const data: ValidatedUpdateUserPayload = {};
+
+  if (r.displayName !== undefined) {
+    if (typeof r.displayName !== 'string') {
+      return { error: 'Tên hiển thị không hợp lệ.' };
+    }
+    const displayName = r.displayName.trim();
+    if (!displayName || displayName.length > 60) {
+      return { error: 'Tên hiển thị cần từ 1 đến 60 ký tự.' };
+    }
+    data.displayName = displayName;
+  }
+
+  if (r.role !== undefined) {
+    const role = parseRole(r.role);
+    if (!role) {
+      return { error: 'Vai trò tài khoản không hợp lệ.' };
+    }
+    data.role = role;
+  }
+
+  if (r.password !== undefined) {
+    if (typeof r.password !== 'string') {
+      return { error: 'Mật khẩu không hợp lệ.' };
+    }
+    if (r.password.length > 0) {
+      if (!r.password.trim() || r.password.length < 6 || r.password.length > 128) {
+        return { error: 'Mật khẩu mới cần từ 6 đến 128 ký tự.' };
+      }
+      data.password = r.password;
+    }
+  }
+
+  if (r.otpCode !== undefined) {
+    if (typeof r.otpCode !== 'string') {
+      return { error: 'Mã OTP không hợp lệ.' };
+    }
+    const otpCode = r.otpCode.trim();
+    if (otpCode.length > 0) {
+      if (!OTP_REGEX.test(otpCode)) {
+        return { error: 'Mã OTP phải gồm đúng 6 chữ số.' };
+      }
+      data.otpCode = otpCode;
+    }
+  }
+
+  if (r.otpHint !== undefined) {
+    if (typeof r.otpHint !== 'string') {
+      return { error: 'Gợi ý OTP không hợp lệ.' };
+    }
+    data.otpHint = r.otpHint.trim().slice(0, 120);
+  }
+
+  if (r.isActive !== undefined) {
+    if (typeof r.isActive !== 'boolean') {
+      return { error: 'Trạng thái hoạt động không hợp lệ.' };
+    }
+    data.isActive = r.isActive;
+  }
+
+  if (r.revokeSession !== undefined) {
+    if (typeof r.revokeSession !== 'boolean') {
+      return { error: 'Tham số thu hồi phiên không hợp lệ.' };
+    }
+    data.revokeSession = r.revokeSession;
+  }
+
+  return { data };
+}
+
+export type ClientActivityEventType =
+  | 'page_visit'
+  | 'page_leave'
+  | 'pixel_heart_viewed'
+  | 'music_toggled'
+  | 'memory_viewed'
+  | 'letter_opened';
+
+export const ALLOWED_CLIENT_ACTIVITY_EVENTS = new Set<ActivityEventType>([
+  'page_visit',
+  'page_leave',
+  'pixel_heart_viewed',
+  'music_toggled',
+  'memory_viewed',
+  'letter_opened',
+]);
+
+export interface ValidatedClientActivityPayload {
+  eventType: ClientActivityEventType;
+  detail: string;
+  metadata: Record<string, string | number | boolean> | null;
+}
+
+export function validateClientActivityPayload(
+  raw: unknown
+): { data: ValidatedClientActivityPayload } | { error: string } {
+  if (!raw || typeof raw !== 'object') {
+    return { error: 'Dữ liệu nhật ký hoạt động không hợp lệ.' };
+  }
+  const r = raw as Record<string, unknown>;
+  const eventType = typeof r.eventType === 'string' ? r.eventType.trim() : '';
+
+  if (!ALLOWED_CLIENT_ACTIVITY_EVENTS.has(eventType as ActivityEventType)) {
+    return { error: 'Loại sự kiện hoạt động không được phép.' };
+  }
+
+  const detail = typeof r.detail === 'string' ? r.detail.trim().slice(0, 160) : '';
+
+  let metadata: Record<string, string | number | boolean> | null = null;
+  if (r.metadata && typeof r.metadata === 'object' && !Array.isArray(r.metadata)) {
+    const clean: Record<string, string | number | boolean> = {};
+    let count = 0;
+    for (const [rawKey, rawVal] of Object.entries(r.metadata)) {
+      if (count >= 6) break;
+      const key = rawKey.trim().slice(0, 40);
+      if (!key) continue;
+
+      if (typeof rawVal === 'string') {
+        clean[key] = rawVal.trim().slice(0, 80);
+        count++;
+      } else if (typeof rawVal === 'number' && Number.isFinite(rawVal)) {
+        clean[key] = rawVal;
+        count++;
+      } else if (typeof rawVal === 'boolean') {
+        clean[key] = rawVal;
+        count++;
+      }
+    }
+    if (count > 0) {
+      metadata = clean;
+    }
+  }
+
+  return {
+    data: {
+      eventType: eventType as ClientActivityEventType,
+      detail,
+      metadata,
     },
   };
 }

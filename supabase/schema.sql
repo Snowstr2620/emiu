@@ -16,7 +16,7 @@ create table if not exists public.site_settings (
   letter_title text not null,
   letter_body text not null,
   letter_signature text not null,
-  viewer_passcode_enabled boolean not null default false,
+  viewer_passcode_enabled boolean not null default true,
   viewer_passcode_hash text not null default '',
   updated_at timestamptz not null default now()
 );
@@ -36,13 +36,50 @@ create table if not exists public.memories (
 create index if not exists idx_memories_sort_order
   on public.memories (sort_order asc, memory_date asc, created_at asc);
 
+-- 3. Bảng tài khoản phân quyền (Admin & Người thương)
+create table if not exists public.app_users (
+  id uuid primary key default gen_random_uuid(),
+  username text unique not null,
+  display_name text not null,
+  role text not null check (role in ('admin', 'viewer')),
+  password_hash text not null,
+  otp_hash text not null,
+  otp_hint text not null default '',
+  is_active boolean not null default true,
+  session_version integer not null default 1,
+  last_login_at timestamptz null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 4. Bảng nhật ký ra vào và hành động người dùng
+create table if not exists public.activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid null references public.app_users(id) on delete set null,
+  username text not null default 'khach',
+  user_role text not null default 'guest' check (user_role in ('admin', 'viewer', 'guest')),
+  event_type text not null,
+  detail text not null default '',
+  device_summary text not null default '',
+  metadata jsonb null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_activity_logs_created_at
+  on public.activity_logs (created_at desc);
+
+create index if not exists idx_activity_logs_event_username
+  on public.activity_logs (event_type, username, created_at desc);
+
 -- Bật Row Level Security: không cấp quyền ghi/đọc công khai trực tiếp qua anon key;
 -- toàn bộ truy vấn đều đi qua Next.js Server API dùng SUPABASE_SERVICE_ROLE_KEY
--- (để bảo vệ viewer_passcode_hash và quyền chỉnh sửa /admin).
+-- (để bảo vệ password_hash, otp_hash, activity_logs và quyền chỉnh sửa /admin).
 alter table public.site_settings enable row level security;
 alter table public.memories enable row level security;
+alter table public.app_users enable row level security;
+alter table public.activity_logs enable row level security;
 
--- 3. Bucket lưu ảnh kỷ niệm & nhạc nền (15MB max, public read, write chỉ qua Signed Upload URL)
+-- 5. Bucket lưu ảnh kỷ niệm & nhạc nền (15MB max, public read, write chỉ qua Signed Upload URL)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'love-memories',

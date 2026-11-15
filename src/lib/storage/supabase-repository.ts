@@ -2,23 +2,42 @@ import crypto from 'node:crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { hashPasscode, verifyPasscode } from '@/lib/auth';
 import {
+  assertCanModifyActiveAdmin,
+  buildInitialUsers,
+  computeTrafficSummary,
   createInitialSeedData,
+  filterActivityLogs,
+  sanitizeUserForClient,
+  shouldBumpSessionVersion,
   stripSettingsForAdmin,
   stripSettingsForPublic,
 } from '@/lib/seed-data';
 import {
   sanitizeStorageFileName,
   UploadKind,
+  ValidatedCreateUserPayload,
   ValidatedMemoryPayload,
   ValidatedSettingsPayload,
+  ValidatedUpdateUserPayload,
 } from '@/lib/validation';
-import { SignedUploadTarget, StorageRepository } from '@/lib/storage/types';
 import {
+  ListActivityLogsFilter,
+  RecordActivityInput,
+  SignedUploadTarget,
+  StorageRepository,
+} from '@/lib/storage/types';
+import {
+  ActivityActorRole,
+  ActivityEventType,
+  ActivityLogItem,
   AdminSiteData,
   AdminSiteSettings,
+  AppUser,
   MemoryItem,
   PublicSiteData,
+  SafeAppUser,
   SiteSettings,
+  UserRole,
 } from '@/types/memories';
 
 interface DbSettingsRow {
@@ -47,6 +66,33 @@ interface DbMemoryRow {
   created_at: string;
 }
 
+interface DbAppUserRow {
+  id: string;
+  username: string;
+  display_name: string;
+  role: UserRole;
+  password_hash: string;
+  otp_hash: string;
+  otp_hint: string;
+  is_active: boolean;
+  session_version: number;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DbActivityLogRow {
+  id: string;
+  user_id: string | null;
+  username: string;
+  user_role: ActivityActorRole;
+  event_type: ActivityEventType;
+  detail: string;
+  device_summary: string;
+  metadata: Record<string, string | number | boolean> | null;
+  created_at: string;
+}
+
 function mapSettingsRow(row: DbSettingsRow): SiteSettings {
   return {
     coupleTitle: row.couple_title,
@@ -72,6 +118,37 @@ function mapMemoryRow(row: DbMemoryRow): MemoryItem {
     imageUrl: row.image_url,
     imageAlt: row.image_alt,
     sortOrder: row.sort_order,
+    createdAt: row.created_at,
+  };
+}
+
+function mapUserRow(row: DbAppUserRow): AppUser {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    role: row.role,
+    passwordHash: row.password_hash,
+    otpHash: row.otp_hash,
+    otpHint: row.otp_hint || '',
+    isActive: row.is_active,
+    sessionVersion: row.session_version,
+    lastLoginAt: row.last_login_at ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapActivityRow(row: DbActivityLogRow): ActivityLogItem {
+  return {
+    id: row.id,
+    userId: row.user_id ?? null,
+    username: row.username,
+    userRole: row.user_role,
+    eventType: row.event_type,
+    detail: row.detail || '',
+    deviceSummary: row.device_summary || '',
+    metadata: row.metadata ?? null,
     createdAt: row.created_at,
   };
 }
@@ -110,6 +187,43 @@ export class SupabaseStorageRepository implements StorageRepository {
     });
   }
 
+  private async ensureUsersSeeded(): Promise<boolean> {
+    const { count: userCount, error: userCountError } = await this.client
+      .from('app_users')
+      .select('id', { count: 'exact', head: true });
+
+    if (userCountError) {
+      throw new Error(`Lỗi kiểm tra bảng app_users trên Supabase: ${userCountError.message}`);
+    }
+
+    if (!userCount) {
+      const initialUsers = buildInitialUsers();
+      const { error: seedUserError } = await this.client.from('app_users').upsert(
+        initialUsers.map((u) => ({
+          id: u.id,
+          username: u.username,
+          display_name: u.displayName,
+          role: u.role,
+          password_hash: u.passwordHash,
+          otp_hash: u.otpHash,
+          otp_hint: u.otpHint,
+          is_active: u.isActive,
+          session_version: u.sessionVersion,
+          last_login_at: u.lastLoginAt,
+          created_at: u.createdAt,
+          updated_at: u.updatedAt,
+        })),
+        { onConflict: 'username', ignoreDuplicates: true }
+      );
+      if (seedUserError) {
+        throw new Error(`Không thể khởi tạo tài khoản mẫu Supabase: ${seedUserError.message}`);
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   private async ensureInitializedAndFetch(): Promise<{
     settings: SiteSettings;
     memories: MemoryItem[];
@@ -125,6 +239,8 @@ export class SupabaseStorageRepository implements StorageRepository {
     }
 
     let settings: SiteSettings;
+    const hadExistingSettings = Boolean(settingsRow);
+
     if (!settingsRow) {
       const seed = createInitialSeedData();
       const { data: inserted, error: insertError } = await this.client
@@ -141,7 +257,7 @@ export class SupabaseStorageRepository implements StorageRepository {
             letter_body: seed.settings.letterBody,
             letter_signature: seed.settings.letterSignature,
             viewer_passcode_enabled: seed.settings.viewerPasscodeEnabled,
-            viewer_passcode_hash: seed.settings.viewerPasscodeHash,
+            viewer_passcode_hash: seed.settings.viewerPasscodeHash ?? '',
             updated_at: seed.settings.updatedAt,
           },
           { onConflict: 'id' }
@@ -181,6 +297,18 @@ export class SupabaseStorageRepository implements StorageRepository {
       settings = mapSettingsRow(settingsRow);
     }
 
+    const seededUsersNow = await this.ensureUsersSeeded();
+    if (hadExistingSettings && seededUsersNow && !settings.viewerPasscodeEnabled) {
+      const { error: upgradeErr } = await this.client
+        .from('site_settings')
+        .update({ viewer_passcode_enabled: true, updated_at: new Date().toISOString() })
+        .eq('id', 1);
+      if (upgradeErr) {
+        throw new Error(`Không thể nâng cấp cấu hình bảo mật Supabase: ${upgradeErr.message}`);
+      }
+      settings = { ...settings, viewerPasscodeEnabled: true };
+    }
+
     const { data: memoryRows, error: memoryError } = await this.client
       .from('memories')
       .select('*')
@@ -198,6 +326,33 @@ export class SupabaseStorageRepository implements StorageRepository {
     };
   }
 
+  private async listRawUsers(): Promise<AppUser[]> {
+    const { data, error } = await this.client
+      .from('app_users')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .returns<DbAppUserRow[]>();
+
+    if (error) {
+      throw new Error(`Lỗi truy vấn Supabase app_users: ${error.message}`);
+    }
+    return (data || []).map(mapUserRow);
+  }
+
+  private async countOtherActiveAdmins(excludeId: string): Promise<number> {
+    const { data, error } = await this.client
+      .from('app_users')
+      .select('id')
+      .eq('role', 'admin')
+      .eq('is_active', true)
+      .returns<{ id: string }[]>();
+
+    if (error) {
+      throw new Error(`Lỗi kiểm tra tài khoản quản trị Supabase: ${error.message}`);
+    }
+    return (data || []).filter((row) => row.id !== excludeId).length;
+  }
+
   async getPublicData(): Promise<PublicSiteData> {
     const { settings, memories } = await this.ensureInitializedAndFetch();
     return {
@@ -206,29 +361,38 @@ export class SupabaseStorageRepository implements StorageRepository {
     };
   }
 
-  async getAdminData(): Promise<AdminSiteData> {
+  async getAdminData(currentUserId?: string | null): Promise<AdminSiteData> {
     const { settings, memories } = await this.ensureInitializedAndFetch();
+    const [rawUsers, activityLogs] = await Promise.all([
+      this.listRawUsers(),
+      this.listActivityLogs({ limit: 200 }),
+    ]);
+
+    const users = rawUsers.map(sanitizeUserForClient);
+    const currentUser = currentUserId ? (users.find((u) => u.id === currentUserId) ?? null) : null;
+
     return {
       settings: stripSettingsForAdmin(settings),
       memories,
+      users,
+      activityLogs,
+      trafficSummary: computeTrafficSummary(activityLogs, rawUsers),
+      currentUser,
     };
   }
 
+  /** @deprecated Legacy global PIN check kept temporarily until Task 2 replaces /api/viewer/unlock. */
   async verifyViewerPasscode(pin: string): Promise<boolean> {
     const { settings } = await this.ensureInitializedAndFetch();
     if (!settings.viewerPasscodeEnabled) return true;
-    return verifyPasscode(pin, settings.viewerPasscodeHash);
+    return verifyPasscode(pin, settings.viewerPasscodeHash || '');
   }
 
   async updateSettings(input: ValidatedSettingsPayload): Promise<AdminSiteSettings> {
     const { settings: current } = await this.ensureInitializedAndFetch();
     const nextHash = input.viewerPasscode
       ? hashPasscode(input.viewerPasscode)
-      : current.viewerPasscodeHash;
-
-    if (input.viewerPasscodeEnabled && !nextHash) {
-      throw new Error('Vui lòng đặt mã mở khoá trước khi bật chế độ riêng tư.');
-    }
+      : (current.viewerPasscodeHash ?? '');
 
     const { data, error } = await this.client
       .from('site_settings')
@@ -371,6 +535,203 @@ export class SupabaseStorageRepository implements StorageRepository {
 
     const refreshed = await this.ensureInitializedAndFetch();
     return refreshed.memories;
+  }
+
+  async listUsers(): Promise<SafeAppUser[]> {
+    await this.ensureUsersSeeded();
+    const users = await this.listRawUsers();
+    return users.map(sanitizeUserForClient);
+  }
+
+  async getUserByUsername(username: string): Promise<AppUser | null> {
+    const normalized = username.trim().toLowerCase();
+    if (!normalized) return null;
+    await this.ensureUsersSeeded();
+
+    const { data, error } = await this.client
+      .from('app_users')
+      .select('*')
+      .eq('username', normalized)
+      .maybeSingle<DbAppUserRow>();
+
+    if (error) {
+      throw new Error(`Lỗi truy vấn tài khoản Supabase: ${error.message}`);
+    }
+    return data ? mapUserRow(data) : null;
+  }
+
+  async getUserById(id: string): Promise<AppUser | null> {
+    if (!id) return null;
+    const { data, error } = await this.client
+      .from('app_users')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle<DbAppUserRow>();
+
+    if (error) {
+      throw new Error(`Lỗi truy vấn tài khoản Supabase: ${error.message}`);
+    }
+    return data ? mapUserRow(data) : null;
+  }
+
+  async createUser(input: ValidatedCreateUserPayload): Promise<SafeAppUser> {
+    await this.ensureUsersSeeded();
+    const username = input.username.trim().toLowerCase();
+
+    const existing = await this.getUserByUsername(username);
+    if (existing) {
+      throw new Error('Tên đăng nhập này đã tồn tại.');
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await this.client
+      .from('app_users')
+      .insert({
+        username,
+        display_name: input.displayName.trim(),
+        role: input.role,
+        password_hash: hashPasscode(input.password),
+        otp_hash: hashPasscode(input.otpCode),
+        otp_hint: input.otpHint.trim(),
+        is_active: input.isActive,
+        session_version: 1,
+        last_login_at: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('*')
+      .single<DbAppUserRow>();
+
+    if (error || !data) {
+      if (error?.code === '23505') {
+        throw new Error('Tên đăng nhập này đã tồn tại.');
+      }
+      throw new Error(`Không thể tạo tài khoản Supabase: ${error?.message}`);
+    }
+
+    return sanitizeUserForClient(mapUserRow(data));
+  }
+
+  async updateUser(id: string, input: ValidatedUpdateUserPayload): Promise<SafeAppUser | null> {
+    const current = await this.getUserById(id);
+    if (!current) return null;
+
+    const otherActiveAdminsCount = await this.countOtherActiveAdmins(id);
+    assertCanModifyActiveAdmin(
+      current,
+      otherActiveAdminsCount,
+      'update',
+      input.role,
+      input.isActive
+    );
+
+    const nextSessionVersion = shouldBumpSessionVersion(current, input)
+      ? current.sessionVersion + 1
+      : current.sessionVersion;
+
+    const patch: Record<string, unknown> = {
+      display_name: input.displayName !== undefined ? input.displayName.trim() : current.displayName,
+      role: input.role ?? current.role,
+      password_hash: input.password ? hashPasscode(input.password) : current.passwordHash,
+      otp_hash: input.otpCode ? hashPasscode(input.otpCode) : current.otpHash,
+      otp_hint: input.otpHint !== undefined ? input.otpHint.trim() : current.otpHint,
+      is_active: input.isActive ?? current.isActive,
+      session_version: nextSessionVersion,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await this.client
+      .from('app_users')
+      .update(patch)
+      .eq('id', id)
+      .select('*')
+      .single<DbAppUserRow>();
+
+    if (error || !data) {
+      throw new Error(`Không thể cập nhật tài khoản Supabase: ${error?.message}`);
+    }
+
+    return sanitizeUserForClient(mapUserRow(data));
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const target = await this.getUserById(id);
+    if (!target) return false;
+
+    const otherActiveAdminsCount = await this.countOtherActiveAdmins(id);
+    assertCanModifyActiveAdmin(target, otherActiveAdminsCount, 'delete');
+
+    const { error } = await this.client.from('app_users').delete().eq('id', id);
+    if (error) {
+      throw new Error(`Không thể xoá tài khoản Supabase: ${error.message}`);
+    }
+    return true;
+  }
+
+  async recordUserLoginSuccess(id: string): Promise<void> {
+    const now = new Date().toISOString();
+    const { error } = await this.client
+      .from('app_users')
+      .update({ last_login_at: now, updated_at: now })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Không thể cập nhật lần đăng nhập cuối: ${error.message}`);
+    }
+  }
+
+  async recordActivity(input: RecordActivityInput): Promise<ActivityLogItem> {
+    const { data, error } = await this.client
+      .from('activity_logs')
+      .insert({
+        user_id: input.userId,
+        username: input.username,
+        user_role: input.userRole,
+        event_type: input.eventType,
+        detail: input.detail.slice(0, 160),
+        device_summary: input.deviceSummary.slice(0, 48),
+        metadata: input.metadata ?? null,
+      })
+      .select('*')
+      .single<DbActivityLogRow>();
+
+    if (error || !data) {
+      throw new Error(`Không thể ghi nhật ký hoạt động Supabase: ${error?.message}`);
+    }
+    return mapActivityRow(data);
+  }
+
+  async listActivityLogs(filters?: ListActivityLogsFilter): Promise<ActivityLogItem[]> {
+    const limit = Math.min(Math.max(filters?.limit ?? 100, 1), 500);
+    const hasSearch = Boolean(filters?.search?.trim());
+
+    let query = this.client
+      .from('activity_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (filters?.eventType && filters.eventType !== 'all') {
+      query = query.eq('event_type', filters.eventType);
+    }
+
+    const normalizedUsername = filters?.username?.trim().toLowerCase();
+    if (
+      normalizedUsername &&
+      normalizedUsername !== 'all' &&
+      normalizedUsername !== 'tat-ca'
+    ) {
+      query = query.eq('username', normalizedUsername);
+    }
+
+    const { data, error } = await query
+      .limit(hasSearch ? 500 : limit)
+      .returns<DbActivityLogRow[]>();
+
+    if (error) {
+      throw new Error(`Lỗi truy vấn nhật ký hoạt động Supabase: ${error.message}`);
+    }
+
+    return filterActivityLogs((data || []).map(mapActivityRow), filters);
   }
 
   async createSignedUploadUrl(input: {
