@@ -38,7 +38,7 @@ Mở rộng website kỷ niệm hiện tại để:
     - Trang `/admin/login` hỗ trợ đăng nhập bằng `Tên đăng nhập` (mặc định `'admin'` để giữ tương thích) + `Mật khẩu` của bất kỳ tài khoản `role === 'admin'` nào đang `isActive`.
 - **Xác thực 2 bước & Kiểm soát phiên theo thời gian thực tại `/`:**
   - `viewerPasscodeEnabled` (tên gọi hiển thị UI: **"Yêu cầu đăng nhập tài khoản & OTP khi vào trang"**) mặc định được **bật (`true`)** ở seed mới để đúng trải nghiệm mở trang có đăng nhập -> OTP -> Trái tim Pixel (Admin có thể tắt công tắc này bất cứ lúc nào trong `/admin` để mở trang công khai không cần đăng nhập).
-  - *Quyết định mặc định của Builder cho dữ liệu `local-db.json` đã tạo từ giai đoạn trước:* Khi migrate file `local-db.json` cũ chưa có trường `users`, giữ nguyên trạng thái `viewerPasscodeEnabled` hiện tại của người dùng trong file cũ (tránh đột ngột khoá trang cũ ngoài ý muốn) hoặc người dùng bật công tắc trong `/admin` tab *Tài khoản & Kiểm soát vào ra*. Với cài đặt mới hoàn toàn (chưa có `local-db.json` / DB rỗng), mặc định `viewerPasscodeEnabled: true`.
+  - *Quyết định mặc định khi migrate `local-db.json` cũ (chưa có trường `users`):* Tự động seed cặp tài khoản mặc định (`admin` + `nguoithuong`) và **bật một lần** `viewerPasscodeEnabled = true` khi nâng cấp từ file `local-db.json` giai đoạn trước chưa có `users` (tương tự khi DB mới hoàn toàn / rỗng), sau đó luôn tôn trọng trạng thái Admin lưu trong `/admin` tab *Tài khoản & Kiểm soát vào ra*.
   - **Bước 1 (`POST /api/viewer/login`):** Kiểm tra `username` + `password` khớp tài khoản `isActive === true`. Nếu đúng -> cấp cookie `ny_viewer_otp_pending` (HMAC-SHA256 ký ở server, `HttpOnly`, `SameSite=Lax`, thời hạn **5 phút**, payload gồm `userId`, `username`, `role`, `sessionVersion`, `exp`). Ghi log `login_step1_ok` (hoặc `login_failed` nếu sai/bị khoá).
   - **Bước 2 (`POST /api/viewer/verify-otp`):** Bắt buộc phải có cookie `ny_viewer_otp_pending` hợp lệ + tài khoản còn `isActive` và đúng `sessionVersion`. Kiểm tra mã OTP 6 chữ số khớp `otpHash`. Nếu đúng:
     - Cấp cookie `ny_viewer_unlocked` (`HttpOnly`, `SameSite=Lax`, thời hạn **7 ngày**, chứa `userId`, `username`, `role`, `sessionVersion`, `exp`).
@@ -172,3 +172,16 @@ Mở rộng website kỷ niệm hiện tại để:
      - 4 thẻ thống kê tổng quan: *Lượt mở trang*, *Đăng nhập thành công*, *Cảnh báo sai mật khẩu / OTP*, *Lượt mở phong thư*.
      - Bộ lọc theo tài khoản & loại sự kiện + nút **Làm mới** + nút **Xoá nhật ký**.
      - Bảng/danh sách nhật ký tiếng Việt hiển thị thời gian theo múi giờ Việt Nam (`HH:mm:ss dd/MM/yyyy`), tài khoản, huy hiệu hành động, chi tiết (ví dụ `"Xem ảnh: Buổi chiều mưa đầu tiên"`) và thiết bị (`iPhone · Safari`).
+
+
+### 4.4 Bổ sung Hiệu ứng Tình yêu (`LoveEffectsLayer`) & Ngôn từ Sến súa ("Mushy Romantic Copy")
+- **Thành phần `src/components/story/LoveEffectsLayer.tsx`:**
+  - Lớp hiệu ứng lãng mạn nhẹ (pointer-events-none, `z-20` hoặc dưới modal `z-50`), hiển thị cánh hoa sakura & trái tim pastel bay lên dịu dàng ở mật độ tinh tế (`8–12` phần tử trên mobile, `14–18` trên desktop/tablet) để không che chữ hay gây giật lag.
+  - Khi người dùng chạm / click nhẹ vào vùng nền trên `/` (hoặc chạm vào trái tim đếm ngày, dấu niêm phong phong thư), bung hiệu ứng **heart-burst** (4–6 trái tim nhỏ toả nhẹ rồi tan biến mượt).
+  - Bắt buộc tôn trọng `@media (prefers-reduced-motion: reduce)` / hook `prefersReducedMotion`: khi reduced-motion bật, dừng chuyển động bay/rung liên tục và chỉ giữ tĩnh trang trí nhẹ.
+- **Tăng cường hiệu ứng ở Hero, Timeline & Phong thư:**
+  - `HeroSection`: Nhịp tim phát sáng dịu quanh badge đếm ngày bên nhau, shimmer lấp lánh nhẹ trên con số ngày, trái tim nhỏ vương quanh nút "Mở khóa miền ký ức" / "Bước vào khu vườn kỷ niệm của tụi mình".
+  - `EnvelopeLetter`: Dấu niêm phong trái tim phát sáng lấp lánh nhẹ và hiệu ứng toả tim hồng khi nhấn mở thư; phong thư mở mượt với tông giấy ấm dịu.
+- **Ngôn từ sến súa, ngọt ngào nhất quán (`seed-data.ts`, `ViewerPasscodeGate`, `PixelHeartIntro`, `HeroSection`, `MemoryTimeline`, `EnvelopeLetter`, `globals.css` / `layout.tsx` metadata):**
+  - Toàn bộ lời chào, gợi ý đăng nhập, màn hình nhập OTP, lời dẫn màn trái tim pixel, tiêu đề & dòng mô tả seed mẫu, chú thích timeline và phong thư mẫu dùng giọng văn tình cảm sâu lắng, ngọt ngào, âu yếm ("anh thương em", "trái tim nhỏ bé", "từng nhịp thở ký ức", "mãi mãi chung một bầu trời"...).
+  - Các câu thông báo lỗi xác thực và UI quản trị `/admin` vẫn giữ rõ ràng, mạch lạc, dễ thao tác.
