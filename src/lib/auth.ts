@@ -106,13 +106,35 @@ export function verifyPasscode(pin: string, storedHash: string): boolean {
   return crypto.timingSafeEqual(derived, expectedBuf);
 }
 
-export async function isAdminRequestAuthenticated(): Promise<boolean> {
+function parseCookieFromHeader(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) return null;
+  const pairs = cookieHeader.split(';');
+  for (const pair of pairs) {
+    const eqIndex = pair.indexOf('=');
+    if (eqIndex === -1) continue;
+    const key = pair.slice(0, eqIndex).trim();
+    if (key === name) {
+      return decodeURIComponent(pair.slice(eqIndex + 1).trim());
+    }
+  }
+  return null;
+}
+
+export async function isAdminRequestAuthenticated(request?: Request): Promise<boolean> {
+  if (request) {
+    const token = parseCookieFromHeader(request.headers.get('cookie'), ADMIN_COOKIE_NAME);
+    return verifyAdminSessionToken(token);
+  }
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
   return verifyAdminSessionToken(token);
 }
 
-export async function isViewerRequestUnlocked(): Promise<boolean> {
+export async function isViewerRequestUnlocked(request?: Request): Promise<boolean> {
+  if (request) {
+    const token = parseCookieFromHeader(request.headers.get('cookie'), VIEWER_COOKIE_NAME);
+    return verifyViewerSessionToken(token);
+  }
   const cookieStore = await cookies();
   const token = cookieStore.get(VIEWER_COOKIE_NAME)?.value;
   return verifyViewerSessionToken(token);
