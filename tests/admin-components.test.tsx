@@ -254,20 +254,52 @@ describe('AdminLoginForm', () => {
 
     const usernameInput = screen.getByLabelText(/Tài khoản quản trị/i);
     const passwordInput = screen.getByLabelText(/Mật khẩu quản trị/i);
-    expect(usernameInput).toHaveClass('bg-[#0d0408]/90', 'text-rose-50', 'text-base', 'sm:text-sm');
-    expect(passwordInput).toHaveClass('bg-[#0d0408]/90', 'text-rose-50', 'text-base', 'sm:text-sm');
+    expect(usernameInput).toHaveClass(
+      'bg-[#0d0408]/90',
+      'text-rose-50',
+      'text-base',
+      'sm:text-sm',
+      'placeholder:text-rose-300/70'
+    );
+    expect(passwordInput).toHaveClass(
+      'bg-[#0d0408]/90',
+      'text-rose-50',
+      'text-base',
+      'sm:text-sm',
+      'placeholder:text-rose-300/70'
+    );
+
+    const backLink = screen.getByRole('link', { name: /Về trang kỷ niệm/i });
+    expect(backLink).toHaveClass(
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-rose-400'
+    );
+    const heartWrapper = backLink.nextElementSibling as HTMLElement;
+    expect(heartWrapper).toHaveClass('shrink-0');
 
     const submitBtn = screen.getByRole('button', { name: /Vào trang quản trị/i });
-    expect(submitBtn).toHaveClass('to-pink-600', 'text-white');
+    expect(submitBtn).toHaveClass(
+      'to-pink-600',
+      'text-white',
+      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:ring-1',
+      'hover:ring-rose-300/40',
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-rose-400'
+    );
+    expect(submitBtn).not.toHaveClass('hover:brightness-110');
 
     const classTokens = Array.from(container.querySelectorAll('[class]')).flatMap((el) =>
       (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
     );
     for (const token of classTokens) {
+      expect(token).not.toBe('hover:brightness-110');
       expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
       expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
       expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
-      expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40)$/);
+      expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40|60)$/);
       const opacityMatch = token.match(
         /^(?:[a-z0-9-]+:)*(?:bg|text|border|ring|from|via|to|divide|placeholder|fill|stroke)-.*\/(\d+)$/
       );
@@ -294,31 +326,49 @@ describe('AdminDashboard 5-tab UI', () => {
     vi.restoreAllMocks();
   });
 
-  test('renders 5 responsive tabs, current user header badge, and non-overflowing layout structure', () => {
+  test('renders 5 responsive tabs with aria-current, persistent live region, current user header badge, and non-overflowing layout structure', () => {
+    const initialWithBlankAlt = makeInitialData({
+      memories: [
+        {
+          ...makeInitialData().memories[0],
+          imageAlt: '',
+        },
+      ],
+    });
     const { container } = render(
-      <AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />
+      <AdminDashboard initialData={initialWithBlankAlt} storageStatus={STORAGE_STATUS} />
     );
 
     expect(screen.getByText('Anh · Chủ vườn ký ức')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Xem trang chính/i }).parentElement).toHaveClass(
+      'sm:shrink-0'
+    );
+    expect(container.querySelector('[aria-live="polite"]')).toBeInTheDocument();
 
     const nav = screen.getByRole('navigation', { name: /Mục quản trị/i });
-    expect(within(nav).getByRole('button', { name: /Kỷ niệm & Ảnh/i })).toBeInTheDocument();
-    expect(
-      within(nav).getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i })
-    ).toBeInTheDocument();
-    expect(within(nav).getByRole('button', { name: /Phong thư tâm sự/i })).toBeInTheDocument();
-    expect(
-      within(nav).getByRole('button', { name: /Tài khoản & Kiểm soát truy cập/i })
-    ).toBeInTheDocument();
-    expect(
-      within(nav).getByRole('button', { name: /Nhật ký ra vào & Hành động/i })
-    ).toBeInTheDocument();
+    const memoriesTab = within(nav).getByRole('button', { name: /Kỷ niệm & Ảnh/i });
+    const settingsTab = within(nav).getByRole('button', {
+      name: /Mở đầu, Nhạc nền & Riêng tư/i,
+    });
+    const letterTab = within(nav).getByRole('button', { name: /Phong thư tâm sự/i });
+    const usersTab = within(nav).getByRole('button', {
+      name: /Tài khoản & Kiểm soát truy cập/i,
+    });
+    const activityTab = within(nav).getByRole('button', {
+      name: /Nhật ký ra vào & Hành động/i,
+    });
+
+    expect(memoriesTab).toHaveAttribute('aria-current', 'page');
+    for (const inactive of [settingsTab, letterTab, usersTab, activityTab]) {
+      expect(inactive).not.toHaveAttribute('aria-current');
+    }
 
     expect(container.firstElementChild).toHaveClass('overflow-x-hidden');
 
-    // Tab 1 (memories) renders existing memory & editor trigger intact
+    // Tab 1 (memories) renders existing memory with title alt fallback & >=40px editor trigger
     expect(screen.getByText('Chiều mưa đầu tiên')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Thêm kỷ niệm mới/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Chiều mưa đầu tiên' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Thêm kỷ niệm mới/i })).toHaveClass('min-h-[40px]');
   });
 
   test('Tab 3 love letter live preview stays intact', async () => {
@@ -779,10 +829,12 @@ describe('AdminDashboard 5-tab UI', () => {
       expect(parsed.searchParams.get('username')).toBe('nguoithuong');
     });
 
-    // Next select filter triggers a failing fetch -> displays error alert notice cleanly
+    // Next select filter triggers a failing fetch -> displays error alert notice cleanly inside assertive live region
     failNextActivity = true;
     await user.selectOptions(screen.getByLabelText(/Loại hành động/i), 'otp_failed');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải nhật ký lúc này.');
+    const errorAlert = await screen.findByRole('alert');
+    expect(errorAlert).toHaveTextContent('Không thể tải nhật ký lúc này.');
+    expect(errorAlert.parentElement).toHaveAttribute('aria-live', 'assertive');
 
     // Deleting the currently filtered user in Tab 4 resets Tab 5 username filter back to ''
     await user.click(
@@ -1027,10 +1079,11 @@ describe('AdminDashboard 5-tab UI', () => {
         (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
       );
       for (const token of classTokens) {
+        expect(token).not.toBe('hover:brightness-110');
         expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
         expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
         expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
-        expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40)$/);
+        expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40|60)$/);
         const opacityMatch = token.match(
           /^(?:[a-z0-9-]+:)*(?:bg|text|border|ring|from|via|to|divide|placeholder|fill|stroke)-.*\/(\d+)$/
         );
@@ -1069,16 +1122,66 @@ describe('AdminDashboard 5-tab UI', () => {
     // Tab 1: open form + open delete confirmation
     assertDarkVelvetTheme(container);
     await user.click(screen.getByRole('button', { name: /Thêm kỷ niệm mới/i }));
+    expect(screen.getByLabelText(/Ngày kỷ niệm/i).parentElement).toHaveClass('min-w-0');
+    expect(screen.getByLabelText(/Tiêu đề ngắn/i).parentElement).toHaveClass('min-w-0');
+    const memoryDropzone = document.getElementById('memory-file-upload')!.closest('label')!;
+    expect(memoryDropzone).toHaveClass(
+      'focus-within:border-rose-400',
+      'focus-within:ring-2',
+      'focus-within:ring-rose-400'
+    );
+    await user.type(screen.getByLabelText(/Đường dẫn ảnh/i), '/samples/memory-1.svg');
+    expect(screen.getByRole('img', { name: /Xem trước ảnh/i })).toHaveClass('max-w-full');
     assertDarkVelvetTheme(container);
     await user.click(screen.getByRole('button', { name: /^Huỷ$/i }));
     await user.click(screen.getByRole('button', { name: /^Xoá$/i }));
     assertDarkVelvetTheme(container);
 
-    // Tab 2: settings + trigger success toast
-    await user.click(screen.getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i }));
+    // Tab 2: settings + trigger success toast + responsive/a11y checks
+    const nav = screen.getByRole('navigation', { name: /Mục quản trị/i });
+    await user.click(within(nav).getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i }));
+    expect(within(nav).getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(within(nav).getByRole('button', { name: /Kỷ niệm & Ảnh/i })).not.toHaveAttribute(
+      'aria-current'
+    );
+    expect(screen.getByLabelText(/Tên hai bạn/i).parentElement).toHaveClass('min-w-0');
+    expect(screen.getByLabelText(/Ngày bắt đầu yêu/i).parentElement).toHaveClass('min-w-0');
+    const musicUrlInput = screen.getByLabelText(/Đường dẫn nhạc nền/i);
+    expect(musicUrlInput).toHaveAttribute('id', 'settings-music-url');
+    expect(musicUrlInput).toHaveClass('placeholder:text-rose-300/70');
+    expect(musicUrlInput.parentElement?.parentElement).toHaveClass(
+      'sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)]'
+    );
+    const audioFilenameSpan = screen.getByText(/Tải file nhạc/i);
+    expect(audioFilenameSpan).toHaveClass('max-w-full', 'sm:max-w-[220px]', 'truncate');
+    expect(audioFilenameSpan.closest('label')).toHaveClass(
+      'focus-within:border-rose-400',
+      'focus-within:ring-2',
+      'focus-within:ring-rose-400'
+    );
+    expect(
+      screen.getByRole('checkbox', { name: /Hiển thị nút bật\/tắt nhạc/i }).closest('label')
+    ).toHaveClass('min-h-[36px]', 'py-1');
+    expect(
+      screen
+        .getByRole('checkbox', { name: /Khoá bảo vệ trang kỷ niệm/i })
+        .closest('label')
+    ).toHaveClass('min-h-[36px]', 'py-1');
     assertDarkVelvetTheme(container);
     await user.click(screen.getByRole('button', { name: /Lưu cài đặt/i }));
-    expect(await screen.findByRole('status')).toBeInTheDocument();
+    const successToast = await screen.findByRole('status');
+    expect(successToast).toBeInTheDocument();
+    const toastCloseBtn = within(successToast).getByRole('button', { name: /Đóng/i });
+    expect(toastCloseBtn).toHaveClass(
+      'text-white/80',
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-white/60'
+    );
+    expect(toastCloseBtn).not.toHaveClass('text-rose-100/80', 'hover:bg-rose-500/20');
     assertDarkVelvetTheme(container);
 
     // Tab 3: letter & preview
@@ -1087,6 +1190,10 @@ describe('AdminDashboard 5-tab UI', () => {
 
     // Tab 4: create form + user cards + inline edit form + inline delete confirm
     await user.click(screen.getByRole('button', { name: /Tài khoản & Kiểm soát truy cập/i }));
+    expect(
+      screen.getByRole('checkbox', { name: /Kích hoạt ngay/i }).closest('label')
+    ).toHaveClass('min-h-[36px]', 'py-1');
+    expect(screen.getByRole('button', { name: /Tạo tài khoản/i })).toHaveClass('min-h-[44px]');
     expect(container.querySelectorAll('#new-user-role option')).toHaveLength(2);
     const adminCard = screen.getByTestId(`user-card-${ADMIN_USER.id}`);
     await user.click(within(adminCard).getByRole('button', { name: /^Sửa$/i }));
@@ -1099,6 +1206,18 @@ describe('AdminDashboard 5-tab UI', () => {
 
     // Tab 5: stat cards + filter selects + all 11 event badges + mobile/desktop views
     await user.click(screen.getByRole('button', { name: /Nhật ký ra vào & Hành động/i }));
+    for (const statId of [
+      'stat-visits-today',
+      'stat-otp-verified',
+      'stat-failed-auth',
+      'stat-active-users',
+    ]) {
+      expect(screen.getByTestId(statId)).toHaveClass('min-w-0');
+    }
+    const desktopTable = screen.getByTestId('activity-desktop-table');
+    const deviceCells = desktopTable.querySelectorAll('tbody tr td:last-child');
+    expect(deviceCells[0]).toHaveClass('max-w-[200px]', 'truncate');
+    expect(deviceCells[0]).toHaveAttribute('title', 'Chrome · macOS');
     expect(container.querySelectorAll('select option').length).toBeGreaterThanOrEqual(16);
     assertDarkVelvetTheme(container);
 

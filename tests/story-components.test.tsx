@@ -7,6 +7,7 @@ import { LoveEffectsLayer } from '@/components/story/LoveEffectsLayer';
 import { PixelHeartIntro } from '@/components/story/PixelHeartIntro';
 import { StoryExperience } from '@/components/story/StoryExperience';
 import { ViewerPasscodeGate } from '@/components/story/ViewerPasscodeGate';
+import { createSeedSettingsAndMemories } from '@/lib/seed-data';
 import { PublicSiteData, SafeAppUser } from '@/types/memories';
 
 const mockRouterRefresh = vi.fn();
@@ -186,24 +187,66 @@ describe('StoryExperience UI components', () => {
     const photoTrigger = screen.getByRole('button', {
       name: /Phóng to ảnh: Buổi chiều mưa đầu tiên/i,
     });
+    photoTrigger.focus();
     await user.click(photoTrigger);
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
     expect(within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.')).toBeInTheDocument();
 
+    const closeBtn = within(dialog).getByRole('button', { name: /Đóng xem ảnh/i });
+    const prevBtn = within(dialog).getByRole('button', { name: /Ảnh trước/i });
+    const nextBtn = within(dialog).getByRole('button', { name: /Ảnh tiếp theo/i });
+
+    // WCAG modal focus management & focus-visible rings
+    expect(closeBtn).toHaveFocus();
+    for (const btn of [closeBtn, prevBtn, nextBtn]) {
+      expect(btn).toHaveClass(
+        'focus-visible:outline-none',
+        'focus-visible:ring-2',
+        'focus-visible:ring-rose-400'
+      );
+    }
+
+    await user.tab();
+    expect(prevBtn).toHaveFocus();
+    await user.tab();
+    expect(nextBtn).toHaveFocus();
+    await user.tab();
+    expect(closeBtn).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(nextBtn).toHaveFocus();
+
     const img = within(dialog).getByRole('img', { name: /Quán trà chiều mưa/i });
     expect(img).toHaveClass('max-h-[calc(48vh-1rem)]', 'sm:max-h-[calc(56vh-1rem)]');
     expect(img).not.toHaveClass('max-h-full');
-    expect(dialog).toHaveClass('bg-[#050203]/90');
-    expect(img.parentElement).toHaveClass('shrink-0', 'min-h-[160px]', 'max-h-[48vh]');
+    expect(dialog).toHaveClass(
+      'bg-[#050203]/90',
+      'overflow-y-auto',
+      'overscroll-contain',
+      'items-start',
+      'sm:items-center'
+    );
+    expect(dialog.firstElementChild).toHaveClass(
+      'my-auto',
+      '[@media(min-height:560px)]:max-h-[92vh]'
+    );
+    expect(dialog.firstElementChild).not.toHaveClass('max-h-[92vh]');
+    expect(img.parentElement).toHaveClass(
+      'shrink-0',
+      'min-h-[160px]',
+      'max-h-[48vh]',
+      '[@media(min-height:560px)]:sm:min-h-[200px]'
+    );
+    expect(img.parentElement).not.toHaveClass('sm:min-h-[200px]');
     const captionContainer = within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.').parentElement;
     expect(captionContainer).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
 
-    // Navigate next and previous
-    await user.click(within(dialog).getByRole('button', { name: /Ảnh tiếp theo/i }));
+    // Navigate next and previous without stealing focus back to Close button
+    await user.click(nextBtn);
     expect(within(dialog).getByText('Hoàng hôn trên đồi')).toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: /Ảnh trước/i }));
+    expect(closeBtn).not.toHaveFocus();
+    await user.click(prevBtn);
     expect(within(dialog).getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
 
     const memoryViewedCalls = getActivityCalls(fetchSpy).filter(
@@ -219,9 +262,9 @@ describe('StoryExperience UI components', () => {
       title: 'Hoàng hôn trên đồi',
     });
 
-    const closeBtn = within(dialog).getByRole('button', { name: /Đóng xem ảnh/i });
     await user.click(closeBtn);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(photoTrigger).toHaveFocus();
   });
 
   test('reveals love letter paragraphs and signature only after tapping the sealed envelope and records letter_opened', async () => {
@@ -231,11 +274,18 @@ describe('StoryExperience UI components', () => {
     expect(screen.queryByText('Đoạn thứ nhất của bức thư.')).not.toBeInTheDocument();
 
     const openBtn = screen.getByRole('button', { name: /Chạm để mở thư/i });
-    expect(openBtn).toHaveClass('to-pink-600');
+    expect(openBtn).toHaveClass(
+      'to-pink-600',
+      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:ring-1',
+      'hover:ring-rose-300/40'
+    );
+    expect(openBtn).not.toHaveClass('hover:brightness-110');
     await user.click(openBtn);
 
     const letterHeading = await screen.findByText('Gửi em yêu của anh,');
     expect(letterHeading).toBeInTheDocument();
+    expect(letterHeading).toHaveClass('min-w-0');
     expect(letterHeading.closest('div')?.parentElement).toHaveClass('bg-[#16070d]/95');
     expect(screen.getByText('Đoạn thứ nhất của bức thư.')).toBeInTheDocument();
     expect(screen.getByText('Đoạn thứ hai đầy thương nhớ.')).toBeInTheDocument();
@@ -263,7 +313,9 @@ describe('StoryExperience UI components', () => {
       />
     );
 
-    const roleBadge = screen.getByText('Anh · Người giữ chìa khoá ký ức').closest('div')!;
+    const roleText = screen.getByText('Anh · Người giữ chìa khoá ký ức');
+    expect(roleText).toHaveClass('sm:max-w-[160px]', 'md:max-w-[180px]', 'lg:max-w-[220px]');
+    const roleBadge = roleText.closest('div')!;
     expect(roleBadge).toHaveClass('order-1');
     const adminLink = screen.getByRole('link', { name: /Quản trị/i });
     expect(adminLink).toHaveAttribute('href', '/admin');
@@ -284,9 +336,15 @@ describe('StoryExperience UI components', () => {
     expect(roleBadge.parentElement).toHaveClass('flex-wrap');
     expect(roleBadge.parentElement).toBe(adminLink.parentElement?.parentElement);
 
-    // Hero top clearance and timeline scroll margin
+    // Hero top clearance, timeline scroll margin, and responsive footer
     expect(document.querySelector('header')).toHaveClass('pt-32');
-    expect(document.getElementById('timeline')).toHaveClass('scroll-mt-24');
+    const timelineSection = document.getElementById('timeline');
+    expect(timelineSection).toHaveClass('scroll-mt-24', 'md:scroll-mt-20');
+    expect(timelineSection).not.toHaveClass('sm:scroll-mt-20');
+    const footer = document.querySelector('footer')!;
+    expect(footer).toHaveClass('px-4');
+    expect(footer.querySelector('p')).toHaveClass('max-w-full');
+    expect(footer.querySelector('svg')).toHaveClass('shrink-0');
 
     // Music toggle telemetry + reduced-motion safety on pulse icon
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
@@ -298,11 +356,26 @@ describe('StoryExperience UI components', () => {
       expect.objectContaining({ eventType: 'music_toggled' })
     );
 
-    // Replay Pixel Heart modal + scrollable backdrop + h2 heading + Escape close
+    // Replay Pixel Heart modal + scrollable backdrop + h2 heading + focus trap/restore + Escape close
+    heartReplayBtn.focus();
     await user.click(heartReplayBtn);
     const heartDialog = await screen.findByRole('dialog');
     expect(heartDialog).toHaveClass('overflow-y-auto', 'overscroll-contain', 'items-start', 'sm:items-center');
     expect(heartDialog.firstElementChild).toHaveClass('my-auto');
+    const heartCloseBtn = within(heartDialog).getByRole('button', { name: /Đóng trái tim pixel/i });
+    const heartBackBtn = within(heartDialog).getByRole('button', { name: /Quay lại miền ký ức/i });
+    expect(heartCloseBtn).toHaveFocus();
+    expect(heartCloseBtn).toHaveClass(
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-rose-400'
+    );
+    await user.tab();
+    expect(heartBackBtn).toHaveFocus();
+    await user.tab();
+    expect(heartCloseBtn).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(heartBackBtn).toHaveFocus();
     expect(within(heartDialog).getByRole('heading', { level: 2, name: 'Minh & Lan' })).toBeInTheDocument();
     const replayCanvas = within(heartDialog).getByRole('img', {
       name: /Trái tim pixel đang ghép nối và đập nhịp yêu thương/i,
@@ -313,6 +386,7 @@ describe('StoryExperience UI components', () => {
     );
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(heartReplayBtn).toHaveFocus();
 
     // Empty displayName falls back cleanly by role
     rerender(
@@ -471,11 +545,39 @@ describe('StoryExperience UI components', () => {
     expect(bentoBtn).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('#01').closest('article')).toHaveClass('lg:col-span-7');
 
-    // Zero blue/sky/indigo/violet/purple utility classes, invalid opacities, or low-contrast to-pink-500 CTAs
+    // Zero blue/sky/indigo/violet/purple utility classes, invalid opacities, hover:brightness-110, or low-contrast to-pink-500 CTAs
     expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
     expect(container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
-    expect(screen.getByRole('button', { name: /Dạo bước vào miền ký ức/i })).toHaveClass('to-pink-600');
+    expect(container.innerHTML).not.toContain('hover:brightness-110');
+    const heroIssueBadge = screen.getByText(/đến mãi mãi về sau/i).parentElement!;
+    expect(heroIssueBadge).toHaveClass('max-w-full');
+    expect(heroIssueBadge.querySelector('svg')).toHaveClass('shrink-0');
+    const heroCta = screen.getByRole('button', { name: /Dạo bước vào miền ký ức/i });
+    expect(heroCta).toHaveClass(
+      'to-pink-600',
+      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:ring-1',
+      'hover:ring-rose-300/40'
+    );
     expect(bentoBtn).toHaveClass('to-pink-600');
+
+    // Equalized paired Bento media stages
+    const card1PhotoBtn = screen.getByRole('button', {
+      name: /Phóng to ảnh: Buổi chiều mưa đầu tiên/i,
+    });
+    expect(card1PhotoBtn).toHaveClass('flex', 'items-center', 'justify-center', 'md:min-h-[240px]');
+
+    // Trailing odd memory (>= 3) spans full desktop & tablet width (lg:col-span-12)
+    rerender(
+      <StoryExperience
+        data={{
+          ...fourMemoriesData,
+          memories: fourMemoriesData.memories.slice(0, 3),
+        }}
+        currentUser={ADMIN_USER}
+      />
+    );
+    expect(screen.getByText('#03').closest('article')).toHaveClass('md:col-span-2', 'lg:col-span-12');
 
     // Single-memory Bento spans full 12 columns centered; disabled music omits empty ml-auto dock wrapper
     rerender(
@@ -741,16 +843,25 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
     expect(sendBeaconMock).not.toHaveBeenCalled();
   });
 
-  test('ViewerPasscodeGate renders purely in Dark Velvet & Crimson-Rose without blue or purple classes', () => {
+  test('ViewerPasscodeGate renders purely in Dark Velvet & Crimson-Rose without blue/purple classes, meets WCAG contrast, and uses romantic copy', async () => {
+    const user = userEvent.setup();
     const { container, unmount } = render(
       <ViewerPasscodeGate coupleTitle="Minh & Lan" showDevDefaultHints={true} />
     );
     expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
     expect(container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
-    expect(screen.getByLabelText(/Tài khoản của mình/i)).toHaveClass('placeholder:text-rose-300/60');
-    expect(screen.getByRole('button', { name: /Tiếp tục đến bước OTP/i })).toHaveClass('to-pink-600');
+    expect(container.innerHTML).not.toContain('hover:brightness-110');
+    expect(screen.getByLabelText(/Tài khoản của mình/i)).toHaveClass('placeholder:text-rose-300/70');
+    expect(screen.getByLabelText(/Mật khẩu yêu thương/i)).toHaveClass('placeholder:text-rose-300/70');
+    expect(screen.getByRole('button', { name: /Tiếp tục đến bước OTP/i })).toHaveClass(
+      'to-pink-600',
+      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:ring-1',
+      'hover:ring-rose-300/40'
+    );
     unmount();
 
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 401 }));
     const otpRender = render(
       <ViewerPasscodeGate
         coupleTitle="Minh & Lan"
@@ -760,8 +871,24 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
       />
     );
     expect(otpRender.container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
+    expect(otpRender.container.innerHTML).not.toContain('hover:brightness-110');
     expect(screen.getByLabelText('Chữ số OTP thứ 1')).toHaveClass('border-rose-400/50');
-    expect(screen.getByRole('button', { name: /Xác nhận bước vào tim nhau/i })).toHaveClass('to-pink-600');
+    const otpSubmitBtn = screen.getByRole('button', { name: /Xác nhận bước vào tim nhau/i });
+    expect(otpSubmitBtn).toHaveClass(
+      'to-pink-600',
+      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:ring-1',
+      'hover:ring-rose-300/40'
+    );
+    fireEvent.paste(screen.getByLabelText('Chữ số OTP thứ 1'), {
+      clipboardData: { getData: () => '999999' },
+    });
+    await user.click(otpSubmitBtn);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/em bé kiểm tra gợi ý/i);
+
+    const seed = createSeedSettingsAndMemories('2026-11-15T00:00:00.000Z');
+    expect(seed.memories[3].title).toBe('Bó hoa hồng nhung và lời thương tròn đầy');
+    expect(seed.memories[3].imageAlt).toBe('Bó hoa hồng nhung rực rỡ dưới ánh nến đêm');
   });
 });
 
@@ -800,8 +927,19 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
       'max-w-[68%]'
     );
 
+    const tagline = screen.getByText(/Từng mảnh nhỏ đều mang theo một ngày anh thương em thật nhiều/i);
+    expect(tagline).toHaveClass('font-serif', 'italic', 'text-sm', 'sm:text-base');
+
     const ctaBtn = screen.getByRole('button', { name: /Mở khoá miền ký ức của tụi mình/i });
-    expect(ctaBtn).toHaveClass('to-pink-600', 'motion-reduce:transform-none', 'motion-reduce:transition-none');
+    expect(ctaBtn).toHaveClass(
+      'to-pink-600',
+      'motion-reduce:transform-none',
+      'motion-reduce:transition-none',
+      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:ring-1',
+      'hover:ring-rose-300/40'
+    );
+    expect(ctaBtn).not.toHaveClass('hover:brightness-110');
     await user.click(ctaBtn);
     expect(onEnterStory).toHaveBeenCalledTimes(1);
   });

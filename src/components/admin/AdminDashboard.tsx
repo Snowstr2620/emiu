@@ -98,15 +98,15 @@ interface EditUserFormState {
 }
 
 const ADMIN_INPUT_CLASS =
-  'w-full min-w-0 rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-3.5 py-2.5 text-base text-rose-50 placeholder:text-rose-300/60 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm';
+  'w-full min-w-0 rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-3.5 py-2.5 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm';
 
 const ADMIN_COMPACT_INPUT_CLASS =
-  'w-full min-w-0 rounded-xl border border-rose-500/25 bg-[#0d0408]/90 px-3 py-2 text-base text-rose-50 placeholder:text-rose-300/60 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm';
+  'w-full min-w-0 rounded-xl border border-rose-500/25 bg-[#0d0408]/90 px-3 py-2 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm';
 
 const ADMIN_OPTION_CLASS = 'bg-[#16080f] text-rose-50';
 
 const ADMIN_PRIMARY_CTA_CLASS =
-  'bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-[0_8px_24px_rgba(225,29,72,0.35)] transition hover:brightness-110';
+  'bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-[0_8px_24px_rgba(225,29,72,0.35)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40';
 
 const ADMIN_SECONDARY_BTN_CLASS =
   'border border-rose-500/25 bg-rose-950/40 text-rose-100 transition hover:border-rose-400/50 hover:bg-rose-900/50 hover:text-white';
@@ -1054,7 +1054,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5 sm:shrink-0">
             <Link
               href="/"
               target="_blank"
@@ -1082,7 +1082,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
             className="flex items-start gap-3 rounded-2xl border border-amber-500/35 bg-amber-950/50 p-4 text-sm text-amber-100"
           >
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <p className="font-semibold">
                 Cảnh báo môi trường serverless chưa kết nối Supabase Cloud
               </p>
@@ -1120,131 +1120,74 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
           </div>
         ) : null}
 
-        {/* Status Toast / Banner */}
-        {notice ? (
-          <div
-            role={notice.type === 'error' ? 'alert' : 'status'}
-            className={`fixed inset-x-4 bottom-4 z-50 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur-md sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-full sm:max-w-md ${
-              notice.type === 'success'
-                ? 'border-emerald-500/40 bg-[#071f17]/95 text-emerald-100'
-                : 'border-red-500/45 bg-[#23070e]/95 text-red-100'
-            }`}
-          >
-            <div className="flex min-w-0 flex-1 items-center gap-2 [overflow-wrap:anywhere]">
-              {notice.type === 'success' ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-red-300" />
-              )}
-              <span className="min-w-0 [overflow-wrap:anywhere]">{notice.text}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setNotice(null)}
-              className="inline-flex min-h-[36px] shrink-0 items-center rounded-xl px-3 py-1.5 text-xs font-medium text-rose-100/80 transition hover:bg-rose-500/20 hover:text-white"
-            >
-              Đóng
-            </button>
-          </div>
-        ) : null}
-
         {/* Navigation Tabs */}
         <nav
           aria-label="Mục quản trị"
           className="glass-card flex flex-wrap gap-1.5 rounded-2xl p-2 sm:gap-2"
         >
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('memories');
-              setNotice(null);
-            }}
-            className={`inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:min-h-[42px] sm:px-4 sm:py-2.5 sm:text-sm ${
-              activeTab === 'memories'
-                ? ADMIN_PRIMARY_CTA_CLASS
-                : 'text-rose-200/80 hover:bg-rose-950/60 hover:text-rose-50'
-            }`}
-          >
-            <ImagePlus className="h-4 w-4 shrink-0" />
-            <span>Kỷ niệm &amp; Ảnh ({memories.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('settings');
-              setNotice(null);
-            }}
-            className={`inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:min-h-[42px] sm:px-4 sm:py-2.5 sm:text-sm ${
-              activeTab === 'settings'
-                ? ADMIN_PRIMARY_CTA_CLASS
-                : 'text-rose-200/80 hover:bg-rose-950/60 hover:text-rose-50'
-            }`}
-          >
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span>Mở đầu, Nhạc nền &amp; Riêng tư</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('letter');
-              setNotice(null);
-            }}
-            className={`inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:min-h-[42px] sm:px-4 sm:py-2.5 sm:text-sm ${
-              activeTab === 'letter'
-                ? ADMIN_PRIMARY_CTA_CLASS
-                : 'text-rose-200/80 hover:bg-rose-950/60 hover:text-rose-50'
-            }`}
-          >
-            <Mail className="h-4 w-4 shrink-0" />
-            <span>Phong thư tâm sự</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('users');
-              setNotice(null);
-            }}
-            className={`inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:min-h-[42px] sm:px-4 sm:py-2.5 sm:text-sm ${
-              activeTab === 'users'
-                ? ADMIN_PRIMARY_CTA_CLASS
-                : 'text-rose-200/80 hover:bg-rose-950/60 hover:text-rose-50'
-            }`}
-          >
-            <Users className="h-4 w-4 shrink-0" />
-            <span>Tài khoản &amp; Kiểm soát truy cập ({users.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('activity');
-              setNotice(null);
-            }}
-            className={`inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition sm:min-h-[42px] sm:px-4 sm:py-2.5 sm:text-sm ${
-              activeTab === 'activity'
-                ? ADMIN_PRIMARY_CTA_CLASS
-                : 'text-rose-200/80 hover:bg-rose-950/60 hover:text-rose-50'
-            }`}
-          >
-            <Activity className="h-4 w-4 shrink-0" />
-            <span>Nhật ký ra vào &amp; Hành động</span>
-          </button>
+          {(
+            [
+              {
+                id: 'memories',
+                label: `Kỷ niệm & Ảnh (${memories.length})`,
+                icon: <ImagePlus className="h-4 w-4 shrink-0" />,
+              },
+              {
+                id: 'settings',
+                label: 'Mở đầu, Nhạc nền & Riêng tư',
+                icon: <SlidersHorizontal className="h-4 w-4 shrink-0" />,
+              },
+              {
+                id: 'letter',
+                label: 'Phong thư tâm sự',
+                icon: <Mail className="h-4 w-4 shrink-0" />,
+              },
+              {
+                id: 'users',
+                label: `Tài khoản & Kiểm soát truy cập (${users.length})`,
+                icon: <Users className="h-4 w-4 shrink-0" />,
+              },
+              {
+                id: 'activity',
+                label: 'Nhật ký ra vào & Hành động',
+                icon: <Activity className="h-4 w-4 shrink-0" />,
+              },
+            ] as const
+          ).map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-current={isActive ? 'page' : undefined}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setNotice(null);
+                }}
+                className={`inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 sm:min-h-[42px] sm:px-4 sm:py-2.5 sm:text-sm ${
+                  isActive
+                    ? ADMIN_PRIMARY_CTA_CLASS
+                    : 'text-rose-200/80 hover:bg-rose-950/60 hover:text-rose-50'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* Tab 1: Memories */}
         {activeTab === 'memories' ? (
           <section className="space-y-6">
             <div className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-3xl p-5">
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-rose-50">Dòng thời gian kỷ niệm</h2>
                 <p className="text-xs text-rose-300/75">
                   Thêm ảnh kỷ niệm thật của hai bạn và sắp xếp thứ tự xuất hiện.
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5 sm:shrink-0">
                 {memories.length > 1 ? (
                   <button
                     type="button"
@@ -1259,7 +1202,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 <button
                   type="button"
                   onClick={openNewMemoryForm}
-                  className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold ${ADMIN_PRIMARY_CTA_CLASS}`}
+                  className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold ${ADMIN_PRIMARY_CTA_CLASS}`}
                 >
                   <Plus className="h-4 w-4" />
                   Thêm kỷ niệm mới
@@ -1288,7 +1231,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 <form onSubmit={handleSaveMemory} className="grid gap-6 md:grid-cols-[1.15fr_0.85fr]">
                   <div className="min-w-0 space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
+                      <div className="min-w-0">
                         <label
                           htmlFor="memory-date"
                           className="mb-1.5 block text-sm font-medium text-rose-100"
@@ -1307,7 +1250,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                         />
                       </div>
 
-                      <div>
+                      <div className="min-w-0">
                         <label
                           htmlFor="memory-title"
                           className="mb-1.5 block text-sm font-medium text-rose-100"
@@ -1391,7 +1334,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     <div className="min-w-0 space-y-3">
                       <label
                         htmlFor="memory-file-upload"
-                        className="flex min-w-0 max-w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-950/45 px-4 py-5 text-center transition hover:border-rose-400/45 hover:bg-rose-950/70"
+                        className="flex min-w-0 max-w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-950/45 px-4 py-5 text-center transition focus-within:border-rose-400 focus-within:ring-2 focus-within:ring-rose-400 hover:border-rose-400/45 hover:bg-rose-950/70"
                       >
                         <Upload className="h-6 w-6 text-rose-400" />
                         <span className="max-w-full break-all text-sm font-semibold text-rose-100">
@@ -1421,7 +1364,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                           <img
                             src={activeImagePreview}
                             alt={memoryForm.imageAlt || memoryForm.title || 'Xem trước ảnh'}
-                            className="mx-auto max-h-56 w-auto rounded-xl object-contain"
+                            className="mx-auto max-h-56 w-auto max-w-full rounded-xl object-contain"
                           />
                         </div>
                       ) : (
@@ -1461,7 +1404,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     <div className="flex min-w-0 items-start gap-4">
                       <img
                         src={item.imageUrl}
-                        alt={item.imageAlt}
+                        alt={item.imageAlt || item.title || 'Ảnh kỷ niệm'}
                         className="h-24 w-24 shrink-0 rounded-2xl border border-rose-500/25 bg-[#0b0408] object-cover shadow-sm"
                       />
                       <div className="min-w-0 space-y-1">
@@ -1562,7 +1505,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-              <div>
+              <div className="min-w-0">
                 <label
                   htmlFor="couple-title"
                   className="mb-1.5 block text-sm font-medium text-rose-100"
@@ -1582,7 +1525,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label
                   htmlFor="love-start-date"
                   className="mb-1.5 block text-sm font-medium text-rose-100"
@@ -1632,7 +1575,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                   <Music className="h-4 w-4 text-rose-400" />
                   <span className="text-sm font-semibold text-rose-100">Nhạc nền nhẹ nhàng</span>
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-rose-200">
+                <label className="inline-flex min-h-[36px] cursor-pointer items-center gap-2 py-1 text-sm text-rose-200">
                   <input
                     type="checkbox"
                     checked={settingsForm.musicEnabled}
@@ -1645,21 +1588,27 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 </label>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <input
-                  type="text"
-                  value={settingsForm.musicUrl}
-                  onChange={(e) => {
-                    clearAudioFilePreview();
-                    setSettingsForm((prev) => ({ ...prev, musicUrl: e.target.value }));
-                  }}
-                  placeholder="/samples/gentle-memories.wav hoặc https://..."
-                  className={ADMIN_INPUT_CLASS}
-                />
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)]">
+                <div className="min-w-0">
+                  <label htmlFor="settings-music-url" className="sr-only">
+                    Đường dẫn nhạc nền
+                  </label>
+                  <input
+                    id="settings-music-url"
+                    type="text"
+                    value={settingsForm.musicUrl}
+                    onChange={(e) => {
+                      clearAudioFilePreview();
+                      setSettingsForm((prev) => ({ ...prev, musicUrl: e.target.value }));
+                    }}
+                    placeholder="/samples/gentle-memories.wav hoặc https://..."
+                    className={ADMIN_INPUT_CLASS}
+                  />
+                </div>
                 <div className="flex min-w-0 flex-wrap gap-2">
-                  <label className="inline-flex min-h-[36px] min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-2xl border border-rose-500/35 bg-rose-950/55 px-3.5 py-2.5 text-xs font-semibold text-rose-100 transition hover:border-rose-400/55 hover:bg-rose-900/60">
+                  <label className="inline-flex min-h-[36px] min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-2xl border border-rose-500/35 bg-rose-950/55 px-3.5 py-2.5 text-xs font-semibold text-rose-100 transition focus-within:border-rose-400 focus-within:ring-2 focus-within:ring-rose-400 hover:border-rose-400/55 hover:bg-rose-900/60">
                     <Upload className="h-3.5 w-3.5 shrink-0" />
-                    <span className="min-w-0 max-w-full break-all">
+                    <span className="min-w-0 max-w-full truncate sm:max-w-[220px]">
                       {pendingAudioFile ? pendingAudioFile.name : 'Tải file nhạc (MP3/M4A/WAV)'}
                     </span>
                     <input
@@ -1706,7 +1655,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     Cổng đăng nhập riêng tư cho trang chính
                   </span>
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-rose-100">
+                <label className="inline-flex min-h-[36px] cursor-pointer items-center gap-2 py-1 text-sm font-medium text-rose-100">
                   <input
                     type="checkbox"
                     checked={settingsForm.viewerPasscodeEnabled}
@@ -1723,7 +1672,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               </div>
 
               <div className="flex flex-col gap-3 rounded-xl border border-rose-500/25 bg-rose-950/40 p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs leading-relaxed text-rose-200/90">
+                <p className="min-w-0 text-xs leading-relaxed text-rose-200/90">
                   Khi bật khoá bảo vệ, người xem tại{' '}
                   <code className="rounded bg-[#0d0408]/80 px-1 py-0.5 text-rose-100">/</code> phải
                   đăng nhập bằng tài khoản riêng và xác thực mã OTP 6 chữ số trước khi ngắm trái tim
@@ -2029,7 +1978,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-rose-100">
+                <label className="inline-flex min-h-[36px] cursor-pointer items-center gap-2 py-1 text-sm text-rose-100">
                   <input
                     id="new-user-active"
                     type="checkbox"
@@ -2045,7 +1994,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 <button
                   type="submit"
                   disabled={creatingUser}
-                  className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-2xl px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${ADMIN_PRIMARY_CTA_CLASS}`}
+                  className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${ADMIN_PRIMARY_CTA_CLASS}`}
                 >
                   <Plus className="h-4 w-4" />
                   {creatingUser ? 'Đang tạo...' : 'Tạo tài khoản'}
@@ -2388,7 +2337,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               <div
                 data-testid="stat-visits-today"
-                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+                className="glass-card min-w-0 rounded-2xl p-4 shadow-glass sm:p-5"
               >
                 <p className="text-xs font-medium text-rose-200/80">Ghé trang hôm nay</p>
                 <p className="mt-2 font-serif text-3xl font-bold text-rose-50">
@@ -2399,7 +2348,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
               <div
                 data-testid="stat-otp-verified"
-                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+                className="glass-card min-w-0 rounded-2xl p-4 shadow-glass sm:p-5"
               >
                 <p className="text-xs font-medium text-emerald-200">Đã xác thực OTP</p>
                 <p className="mt-2 font-serif text-3xl font-bold text-emerald-300">
@@ -2410,7 +2359,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
               <div
                 data-testid="stat-failed-auth"
-                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+                className="glass-card min-w-0 rounded-2xl p-4 shadow-glass sm:p-5"
               >
                 <p className="text-xs font-medium text-red-200">Cảnh báo đăng nhập sai</p>
                 <p className="mt-2 font-serif text-3xl font-bold text-red-300">
@@ -2421,7 +2370,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
               <div
                 data-testid="stat-active-users"
-                className="glass-card rounded-2xl p-4 shadow-glass sm:p-5"
+                className="glass-card min-w-0 rounded-2xl p-4 shadow-glass sm:p-5"
               >
                 <p className="text-xs font-medium text-pink-200">Tài khoản hoạt động</p>
                 <p className="mt-2 font-serif text-3xl font-bold text-rose-100">
@@ -2670,7 +2619,10 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                             <td className="max-w-xs break-words [overflow-wrap:anywhere] px-4 py-3 text-xs text-rose-100/90">
                               {log.detail || eventMeta.label}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-xs text-rose-300/75">
+                            <td
+                              title={log.deviceSummary || 'Không rõ thiết bị'}
+                              className="max-w-[200px] truncate whitespace-nowrap px-4 py-3 text-xs text-rose-300/75"
+                            >
                               {log.deviceSummary || 'Không rõ thiết bị'}
                             </td>
                           </tr>
@@ -2682,6 +2634,38 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               </>
             )}
           </section>
+        ) : null}
+      </div>
+
+      {/* Persistent live region for floating status / error toast */}
+      <div aria-live={notice?.type === 'error' ? 'assertive' : 'polite'} aria-atomic="true">
+        {notice ? (
+          <div
+            role={notice.type === 'error' ? 'alert' : 'status'}
+            className={`fixed inset-x-4 bottom-4 z-50 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur-md sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-full sm:max-w-md ${
+              notice.type === 'success'
+                ? 'border-emerald-500/40 bg-[#071f17]/95 text-emerald-100'
+                : 'border-red-500/45 bg-[#23070e]/95 text-red-100'
+            }`}
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-2 [overflow-wrap:anywhere]">
+              {notice.type === 'success' ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-red-300" />
+              )}
+              <span className="min-w-0 [overflow-wrap:anywhere]">{notice.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className={`inline-flex min-h-[36px] shrink-0 items-center rounded-xl px-3 py-1.5 text-xs font-medium text-white/80 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
+                notice.type === 'success' ? 'hover:bg-emerald-400/15' : 'hover:bg-red-400/15'
+              }`}
+            >
+              Đóng
+            </button>
+          </div>
         ) : null}
       </div>
     </div>

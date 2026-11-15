@@ -280,7 +280,7 @@ export function ViewerPasscodeGate({
       };
 
       if (!res.ok) {
-        setError(payload.error || 'Mã OTP chưa khớp mất rồi, bạn nhỏ kiểm tra gợi ý lại nhé.');
+        setError(payload.error || 'Mã OTP chưa khớp mất rồi, em bé kiểm tra gợi ý lại nhé.');
         return;
       }
 
@@ -389,7 +389,7 @@ export function ViewerPasscodeGate({
                       autoComplete="username"
                       placeholder="Ví dụ: nguoithuong"
                       required
-                      className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-4 py-3 text-base text-rose-50 placeholder:text-rose-300/60 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
+                      className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-4 py-3 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
                     />
                   </div>
 
@@ -411,7 +411,7 @@ export function ViewerPasscodeGate({
                       autoComplete="current-password"
                       placeholder="Nhập mật khẩu bí mật..."
                       required
-                      className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-4 py-3 text-base text-rose-50 placeholder:text-rose-300/60 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
+                      className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-4 py-3 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
                     />
                   </div>
 
@@ -456,7 +456,7 @@ export function ViewerPasscodeGate({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(225,29,72,0.34)] transition hover:brightness-110 disabled:opacity-60 motion-reduce:transform-none motion-reduce:transition-none"
+                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(225,29,72,0.34)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 disabled:opacity-60 motion-reduce:transform-none motion-reduce:transition-none"
                   >
                     <Heart className="h-4 w-4 fill-white" />
                     <span>{loading ? 'Đang gõ cửa trái tim...' : 'Tiếp tục đến bước OTP'}</span>
@@ -512,7 +512,7 @@ export function ViewerPasscodeGate({
                     <button
                       type="submit"
                       disabled={loading || otpValue.length < 6}
-                      className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(225,29,72,0.34)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transform-none motion-reduce:transition-none"
+                      className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(225,29,72,0.34)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transform-none motion-reduce:transition-none"
                     >
                       <Heart className="h-4 w-4 fill-white" />
                       <span>

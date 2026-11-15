@@ -134,11 +134,11 @@ export function createSeedSettingsAndMemories(now: string = new Date().toISOStri
       {
         id: '11111111-1111-4111-8111-111111111104',
         memoryDate: '2026-02-14',
-        title: 'Bó hoa pastel và lời thương tròn đầy',
+        title: 'Bó hoa hồng nhung và lời thương tròn đầy',
         story:
           'Chẳng cần điều gì xa hoa, chỉ một bó hoa dịu dàng, bữa tối anh nấu bằng cả tấm lòng và cái ôm thật lâu từ em — vậy là đủ trọn vẹn cả bầu trời hạnh phúc.',
         imageUrl: '/samples/memory-4.svg',
-        imageAlt: 'Bó hoa pastel dịu dàng ngày lễ tình nhân',
+        imageAlt: 'Bó hoa hồng nhung rực rỡ dưới ánh nến đêm',
         sortOrder: 3,
         createdAt: now,
       },

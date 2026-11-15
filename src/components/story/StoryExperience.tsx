@@ -13,6 +13,7 @@ import { MemoryTimeline } from '@/components/story/MemoryTimeline';
 import { PhotoLightbox } from '@/components/story/PhotoLightbox';
 import { PixelHeartIntro } from '@/components/story/PixelHeartIntro';
 import { calculateDaysTogether } from '@/lib/date-utils';
+import { useModalFocusTrap } from '@/lib/useModalFocusTrap';
 import type { ActivityEventType, PublicSiteData, SafeAppUser } from '@/types/memories';
 
 interface StoryExperienceProps {
@@ -86,6 +87,14 @@ export function StoryExperience({
   const hasSentLeaveRef = useRef(false);
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
+  const heartModalRef = useRef<HTMLDivElement | null>(null);
+  const heartCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useModalFocusTrap({
+    isOpen: showHeartModal,
+    containerRef: heartModalRef,
+    initialFocusRef: heartCloseButtonRef,
+  });
 
   const daysTogether = calculateDaysTogether(settings.loveStartDate);
   const currentUserId = currentUser?.id ?? null;
@@ -254,7 +263,9 @@ export function StoryExperience({
                 className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse motion-reduce:animate-none"
               />
               <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400 sm:h-3.5 sm:w-3.5" />
-              <span className="max-w-[130px] truncate sm:max-w-[200px]">{roleLabel}</span>
+              <span className="max-w-[130px] truncate sm:max-w-[160px] md:max-w-[180px] lg:max-w-[220px]">
+                {roleLabel}
+              </span>
             </div>
           )}
 
@@ -330,10 +341,12 @@ export function StoryExperience({
           />
         </main>
 
-        <footer className="relative z-10 pb-10 text-center text-xs text-rose-300/65">
-          <p className="inline-flex items-center gap-1.5">
-            <Heart className="h-3 w-3 fill-rose-400 text-rose-400" />
-            <span>Nơi cất giữ từng nhịp tim dịu dàng của {settings.coupleTitle}</span>
+        <footer className="relative z-10 px-4 pb-10 text-center text-xs text-rose-300/65">
+          <p className="inline-flex max-w-full items-center gap-1.5">
+            <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400" />
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+              Nơi cất giữ từng nhịp tim dịu dàng của {settings.coupleTitle}
+            </span>
           </p>
         </footer>
 
@@ -346,9 +359,11 @@ export function StoryExperience({
 
         {showHeartModal && (
           <div
+            ref={heartModalRef}
             role="dialog"
             aria-modal="true"
             aria-label="Ngắm lại trái tim pixel"
+            tabIndex={-1}
             className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-[#060204]/80 p-4 backdrop-blur-md sm:items-center"
             onClick={() => setShowHeartModal(false)}
           >
@@ -357,10 +372,11 @@ export function StoryExperience({
               onClick={(e) => e.stopPropagation()}
             >
               <button
+                ref={heartCloseButtonRef}
                 type="button"
                 onClick={() => setShowHeartModal(false)}
                 aria-label="Đóng trái tim pixel"
-                className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-rose-500/30 bg-[#190911]/90 text-rose-200 shadow-sm transition hover:border-rose-400/60 hover:text-white"
+                className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-rose-500/30 bg-[#190911]/90 text-rose-200 shadow-sm transition hover:border-rose-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
               >
                 <X className="h-5 w-5" />
               </button>

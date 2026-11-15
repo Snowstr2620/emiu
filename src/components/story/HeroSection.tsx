@@ -30,8 +30,8 @@ export function HeroSection({
         transition={{ duration: 0.65, ease: 'easeOut' }}
         className="flex min-w-0 max-w-full flex-col items-center"
       >
-        <div className="inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-950/50 px-4 py-1.5 text-xs font-semibold tracking-wider text-rose-200 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
-          <Sparkles className="h-3.5 w-3.5 text-rose-400" />
+        <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-rose-500/30 bg-rose-950/50 px-4 py-1.5 text-xs font-semibold tracking-wider text-rose-200 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-rose-400" />
           <span>Từ {formatMemoryDateVi(loveStartDate)} đến mãi mãi về sau ♥</span>
         </div>
 
@@ -85,7 +85,7 @@ export function HeroSection({
         <button
           type="button"
           onClick={onStartJourney}
-          className="mt-10 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(225,29,72,0.38)] transition hover:brightness-110 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+          className="mt-10 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(225,29,72,0.38)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
         >
           <span>Dạo bước vào miền ký ức</span>
           <ArrowDown className="h-4 w-4" />

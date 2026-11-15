@@ -77,7 +77,7 @@ export function EnvelopeLetter({
           <button
             type="button"
             onClick={handleOpenLetter}
-            className="mt-6 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-7 py-3.5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(225,29,72,0.36)] transition hover:brightness-110 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+            className="mt-6 inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-7 py-3.5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(225,29,72,0.36)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
           >
             <MailOpen className="h-4 w-4" />
             <span>Chạm để mở thư</span>
@@ -119,7 +119,7 @@ export function EnvelopeLetter({
 
           <div className="rounded-2xl border border-rose-400/25 bg-[#16070d]/95 p-6 shadow-[inset_0_1px_0_rgba(255,228,230,0.07)] sm:p-10">
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-rose-500/20 pb-4">
-              <h3 className="break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold text-rose-50 sm:text-3xl">
+              <h3 className="min-w-0 break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold text-rose-50 sm:text-3xl">
                 {letterTitle}
               </h3>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-rose-500/25 bg-rose-950/60 text-rose-400">

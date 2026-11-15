@@ -377,7 +377,7 @@ export function PixelHeartIntro({
         />
       </div>
 
-      <p className="mb-5 text-xs font-medium italic text-rose-300/90 sm:text-sm">
+      <p className="mb-5 font-serif text-sm font-medium italic text-rose-300/90 sm:text-base">
         ♥ Từng mảnh nhỏ đều mang theo một ngày anh thương em thật nhiều ♥
       </p>
 
@@ -385,7 +385,7 @@ export function PixelHeartIntro({
         type="button"
         onClick={onEnterStory}
         disabled={entering}
-        className="love-pulse-glow inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(225,29,72,0.38)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-70 motion-reduce:transform-none motion-reduce:transition-none"
+        className="love-pulse-glow inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(225,29,72,0.38)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 active:scale-[0.98] disabled:opacity-70 motion-reduce:transform-none motion-reduce:transition-none"
       >
         <Heart className="h-4 w-4 fill-white" />
         <span>

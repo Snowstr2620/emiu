@@ -16,10 +16,22 @@ type ViewMode = 'bento' | 'stream';
 export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('bento');
 
+  function isTrailingOddCard(index: number): boolean {
+    return (
+      viewMode === 'bento' &&
+      memories.length >= 3 &&
+      memories.length % 2 === 1 &&
+      index === memories.length - 1
+    );
+  }
+
   function getBentoSpanClass(index: number): string {
     if (viewMode !== 'bento') return '';
     if (memories.length === 1) {
       return 'md:col-span-2 lg:col-span-12 max-w-3xl mx-auto w-full';
+    }
+    if (isTrailingOddCard(index)) {
+      return 'md:col-span-2 lg:col-span-12';
     }
     return index % 4 === 0 || index % 4 === 3 ? 'lg:col-span-7' : 'lg:col-span-5';
   }
@@ -27,7 +39,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
   return (
     <section
       id="timeline"
-      className="mx-auto max-w-6xl scroll-mt-24 px-4 py-14 sm:scroll-mt-20 sm:px-8 sm:py-20"
+      className="mx-auto max-w-6xl scroll-mt-24 px-4 py-14 sm:px-8 sm:py-20 md:scroll-mt-20"
     >
       <div className="mb-10 flex flex-col gap-5 sm:mb-12 md:flex-row md:items-end md:justify-between">
         <div className="max-w-2xl text-left">
@@ -127,7 +139,11 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                   type="button"
                   onClick={() => onOpenPhoto(index)}
                   aria-label={zoomLabel}
-                  className="group relative block w-full overflow-hidden rounded-2xl border border-rose-500/15 bg-[#0b0408]/95 p-2 text-left focus:outline-none focus:ring-2 focus:ring-rose-400/60"
+                  className={`group relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-rose-500/15 bg-[#0b0408]/95 p-2 text-left focus:outline-none focus:ring-2 focus:ring-rose-400/60 md:min-h-[240px] ${
+                    viewMode === 'bento' && memories.length > 1 && !isTrailingOddCard(index)
+                      ? 'md:h-[300px] lg:h-[360px]'
+                      : ''
+                  }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -135,7 +151,11 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                     alt={memory.imageAlt || memory.title || 'Ảnh kỷ niệm'}
                     loading="lazy"
                     decoding="async"
-                    className="mx-auto max-h-[380px] w-auto max-w-full rounded-xl object-contain transition duration-300 group-hover:scale-[1.018] motion-reduce:transform-none motion-reduce:transition-none lg:max-h-[420px]"
+                    className={`mx-auto w-auto max-w-full rounded-xl object-contain transition duration-300 group-hover:scale-[1.018] motion-reduce:transform-none motion-reduce:transition-none ${
+                      viewMode === 'bento' && memories.length > 1 && !isTrailingOddCard(index)
+                        ? 'max-h-[380px] md:max-h-full'
+                        : 'max-h-[380px] lg:max-h-[420px]'
+                    }`}
                   />
                   <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-[#12070c]/85 px-2.5 py-1 text-[11px] font-medium text-rose-100 shadow-sm backdrop-blur-md">
                     <Maximize2 className="h-3 w-3 text-rose-400" />

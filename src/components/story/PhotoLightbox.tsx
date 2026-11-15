@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Heart, X } from 'lucide-react';
 import { formatMemoryLongDateVi } from '@/lib/date-utils';
+import { useModalFocusTrap } from '@/lib/useModalFocusTrap';
 import { MemoryItem } from '@/types/memories';
 
 interface PhotoLightboxProps {
@@ -20,6 +21,14 @@ export function PhotoLightbox({
 }: PhotoLightboxProps) {
   const isOpen = selectedIndex !== null && Boolean(memories[selectedIndex]);
   const memory = isOpen && selectedIndex !== null ? memories[selectedIndex] : null;
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useModalFocusTrap({
+    isOpen,
+    containerRef: dialogRef,
+    initialFocusRef: closeButtonRef,
+  });
 
   useEffect(() => {
     if (!isOpen || selectedIndex === null) return;
@@ -47,14 +56,16 @@ export function PhotoLightbox({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={memory.title || 'Xem ảnh kỷ niệm'}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#050203]/90 p-4 backdrop-blur-lg sm:p-6"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-[#050203]/90 p-4 backdrop-blur-lg sm:items-center sm:p-6"
       onClick={onClose}
     >
       <div
-        className="glass-card relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl p-4 sm:p-6"
+        className="glass-card relative my-auto flex w-full max-w-3xl flex-col overflow-hidden rounded-3xl p-4 sm:p-6 [@media(min-height:560px)]:max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
@@ -74,16 +85,17 @@ export function PhotoLightbox({
           </div>
 
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Đóng xem ảnh"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-rose-500/30 bg-[#190911]/90 text-rose-200 shadow-sm transition hover:border-rose-400/60 hover:bg-rose-950/90 hover:text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-rose-500/30 bg-[#190911]/90 text-rose-200 shadow-sm transition hover:border-rose-400/60 hover:bg-rose-950/90 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="relative flex min-h-[160px] max-h-[48vh] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-rose-500/20 bg-[#0b0408]/95 p-2 sm:min-h-[200px] sm:max-h-[56vh]">
+        <div className="relative flex min-h-[160px] max-h-[48vh] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-rose-500/20 bg-[#0b0408]/95 p-2 sm:max-h-[56vh] [@media(min-height:560px)]:sm:min-h-[200px]">
           {hasMultiple && (
             <button
               type="button"
@@ -91,7 +103,7 @@ export function PhotoLightbox({
                 onSelectIndex((selectedIndex - 1 + memories.length) % memories.length)
               }
               aria-label="Ảnh trước"
-              className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-rose-500/35 bg-[#190911]/90 text-rose-100 shadow-[0_0_20px_rgba(225,29,72,0.28)] transition hover:border-rose-400 hover:bg-rose-950/90 hover:text-white"
+              className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-rose-500/35 bg-[#190911]/90 text-rose-100 shadow-[0_0_20px_rgba(225,29,72,0.28)] transition hover:border-rose-400 hover:bg-rose-950/90 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -109,7 +121,7 @@ export function PhotoLightbox({
               type="button"
               onClick={() => onSelectIndex((selectedIndex + 1) % memories.length)}
               aria-label="Ảnh tiếp theo"
-              className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-rose-500/35 bg-[#190911]/90 text-rose-100 shadow-[0_0_20px_rgba(225,29,72,0.28)] transition hover:border-rose-400 hover:bg-rose-950/90 hover:text-white"
+              className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-rose-500/35 bg-[#190911]/90 text-rose-100 shadow-[0_0_20px_rgba(225,29,72,0.28)] transition hover:border-rose-400 hover:bg-rose-950/90 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
             >
               <ChevronRight className="h-5 w-5" />
             </button>

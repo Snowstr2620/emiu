@@ -62,12 +62,12 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
         <div className="mb-6 flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-medium text-rose-200 transition hover:text-white"
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-medium text-rose-200 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
           >
             <ArrowLeft className="h-4 w-4" />
             Về trang kỷ niệm
           </Link>
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-950/60 text-rose-400 shadow-[0_0_24px_rgba(225,29,72,0.22)]">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-950/60 text-rose-400 shadow-[0_0_24px_rgba(225,29,72,0.22)]">
             <Heart className="h-5 w-5 fill-rose-500/25" />
           </span>
         </div>
@@ -97,7 +97,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
                 placeholder="VD: admin"
                 autoComplete="username"
                 required
-                className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 py-3 pl-10 pr-4 text-base text-rose-50 placeholder:text-rose-300/60 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
+                className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 py-3 pl-10 pr-4 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
               />
             </div>
           </div>
@@ -119,7 +119,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
                 placeholder="Nhập mật khẩu..."
                 autoComplete="current-password"
                 required
-                className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 py-3 pl-10 pr-4 text-base text-rose-50 placeholder:text-rose-300/60 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
+                className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 py-3 pl-10 pr-4 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
               />
             </div>
           </div>
@@ -151,7 +151,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
           <button
             type="submit"
             disabled={submitting || !username.trim() || !password.trim()}
-            className="min-h-[44px] w-full rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(225,29,72,0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-[44px] w-full rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(225,29,72,0.35)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Đang đăng nhập...' : 'Vào trang quản trị'}
           </button>

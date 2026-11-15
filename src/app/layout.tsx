@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import '@fontsource-variable/plus-jakarta-sans';
 import '@fontsource/cormorant-garamond/400.css';
 import '@fontsource/cormorant-garamond/500.css';
@@ -14,6 +14,10 @@ export const metadata: Metadata = {
     'Nơi cất giữ từng nhịp tim rung động, những bức ảnh ngập tràn thương nhớ và bức tâm thư dịu dàng gửi em bé yêu.',
 };
 
+export const viewport: Viewport = {
+  themeColor: '#080306',
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -21,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className="min-h-screen antialiased bg-[#080306] text-rose-50 airy-pastel-bg godly-velvet-bg selection:bg-rose-500/30 selection:text-rose-100">
+      <body className="min-h-screen antialiased bg-[#080306] text-rose-50 godly-velvet-bg selection:bg-rose-500/30 selection:text-rose-100">
         {children}
       </body>
     </html>
