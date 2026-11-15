@@ -394,7 +394,6 @@ describe('AdminDashboard 5-tab UI', () => {
       return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
     });
 
-    // Include SECOND_ADMIN_USER in one scenario? First test with only 1 active admin (ADMIN_USER)
     render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
 
     await user.click(
@@ -625,5 +624,148 @@ describe('AdminDashboard 5-tab UI', () => {
     ).toBeInTheDocument();
     expect(within(desktopWrapper).getByText('19:30:00 15/11/2026')).toBeInTheDocument();
     expect(within(screen.getByTestId('stat-visits-today')).getByText('15')).toBeInTheDocument();
+  });
+
+  test('Tab 4 syncs header currentUser badge on self-edit, omits blank password/otpCode, rejects whitespace-only password client-side, and explains locked role', async () => {
+    const user = userEvent.setup();
+    let capturedPatchBody: Record<string, unknown> | null = null;
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === `/api/admin/users/${ADMIN_USER.id}` && init?.method === 'PATCH') {
+        capturedPatchBody = JSON.parse(String(init.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            user: {
+              ...ADMIN_USER,
+              displayName: String(capturedPatchBody.displayName ?? ADMIN_USER.displayName),
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
+    });
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    const header = screen.getByRole('banner');
+    expect(within(header).getByText(ADMIN_USER.displayName)).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: /Tài khoản & Kiểm soát truy cập/i })
+    );
+
+    const adminCard = screen.getByTestId(`user-card-${ADMIN_USER.id}`);
+    await user.click(within(adminCard).getByRole('button', { name: /^Sửa$/i }));
+
+    // Disabled role selector exposes tooltip & helper note explaining why role change is locked
+    const roleSelect = within(adminCard).getByLabelText(/^Vai trò$/i);
+    expect(roleSelect).toBeDisabled();
+    expect(roleSelect).toHaveAttribute(
+      'title',
+      expect.stringContaining('tài khoản đang đăng nhập')
+    );
+
+    // Input length constraints align with server validation limits
+    const editDisplayInput = within(adminCard).getByLabelText(/Tên hiển thị/i);
+    const editPasswordInput = within(adminCard).getByLabelText(/Mật khẩu mới/i);
+    const editHintInput = within(adminCard).getByLabelText(/Gợi ý OTP/i);
+    expect(editDisplayInput).toHaveAttribute('maxLength', '60');
+    expect(editPasswordInput).toHaveAttribute('maxLength', '128');
+    expect(editHintInput).toHaveAttribute('maxLength', '120');
+
+    // Whitespace-only password (6 spaces) is rejected client-side without calling PATCH
+    await user.type(editPasswordInput, '      ');
+    await user.click(within(adminCard).getByRole('button', { name: /Lưu thay đổi/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/khoảng trắng|6–128/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // Clear password, keep otpCode blank, update displayName -> omits password & otpCode keys and syncs header badge
+    await user.clear(editPasswordInput);
+    await user.clear(editDisplayInput);
+    await user.type(editDisplayInput, 'Anh · Chủ Vườn Mới');
+    await user.click(within(adminCard).getByRole('button', { name: /Lưu thay đổi/i }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(capturedPatchBody).not.toBeNull();
+    expect('password' in capturedPatchBody!).toBe(false);
+    expect('otpCode' in capturedPatchBody!).toBe(false);
+    expect(capturedPatchBody!.displayName).toBe('Anh · Chủ Vườn Mới');
+
+    expect(await within(header).findByText('Anh · Chủ Vườn Mới')).toBeInTheDocument();
+  });
+
+  test('Tab 5 <select> filter triggers GET /api/admin/activity immediately, shows error notice on failure, and resets username filter when deleted', async () => {
+    const user = userEvent.setup();
+    let failNextActivity = false;
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.startsWith('/api/admin/activity')) {
+        if (failNextActivity) {
+          return new Response(JSON.stringify({ error: 'Không thể tải nhật ký lúc này.' }), {
+            status: 500,
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            logs: [],
+            trafficSummary: {
+              visitsToday: 12,
+              otpVerifiedToday: 4,
+              failedAuthToday: 2,
+              activeUsersCount: 2,
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url === `/api/admin/users/${VIEWER_USER.id}` && init?.method === 'DELETE') {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
+    });
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    // Open Tab 5 and change a <select> filter without clicking Làm mới
+    await user.click(
+      screen.getByRole('button', { name: /Nhật ký ra vào & Hành động/i })
+    );
+    await user.selectOptions(screen.getByLabelText(/Lọc tài khoản/i), 'nguoithuong');
+
+    await waitFor(() => {
+      const firstActivityUrl = fetchSpy.mock.calls
+        .map(([u]) => String(u))
+        .find((u) => u.startsWith('/api/admin/activity'));
+      expect(firstActivityUrl).toBeDefined();
+      const parsed = new URL(firstActivityUrl!, 'http://localhost');
+      expect(parsed.searchParams.get('username')).toBe('nguoithuong');
+    });
+
+    // Next select filter triggers a failing fetch -> displays error alert notice cleanly
+    failNextActivity = true;
+    await user.selectOptions(screen.getByLabelText(/Loại hành động/i), 'otp_failed');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải nhật ký lúc này.');
+
+    // Deleting the currently filtered user in Tab 4 resets Tab 5 username filter back to ''
+    await user.click(
+      screen.getByRole('button', { name: /Tài khoản & Kiểm soát truy cập/i })
+    );
+    const viewerCard = screen.getByTestId(`user-card-${VIEWER_USER.id}`);
+    await user.click(within(viewerCard).getByRole('button', { name: /^Xoá$/i }));
+    await user.click(within(viewerCard).getByRole('button', { name: /Xác nhận xoá/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId(`user-card-${VIEWER_USER.id}`)).not.toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: /Nhật ký ra vào & Hành động/i })
+    );
+    expect(screen.getByLabelText(/Lọc tài khoản/i)).toHaveValue('');
   });
 });

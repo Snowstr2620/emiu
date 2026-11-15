@@ -221,12 +221,52 @@ function createInitialUserForm(): CreateUserFormState {
   };
 }
 
+/** Validate user account fields in sync with server-side `validation.ts` rules. */
+function validateUserFormFields(input: {
+  displayName: string;
+  password: string;
+  otpCode: string;
+  otpHint: string;
+  requirePasswordAndOtp: boolean;
+}): string | null {
+  const trimmedDisplay = input.displayName.trim();
+  const trimmedOtp = input.otpCode.trim();
+  const trimmedHint = input.otpHint.trim();
+
+  if (!trimmedDisplay) {
+    return input.requirePasswordAndOtp
+      ? 'Vui lòng nhập tên hiển thị cho tài khoản.'
+      : 'Tên hiển thị không được để trống.';
+  }
+  if (trimmedDisplay.length > 60) {
+    return 'Tên hiển thị tối đa 60 ký tự.';
+  }
+
+  if (input.requirePasswordAndOtp || input.password.length > 0) {
+    if (!input.password.trim() || input.password.length < 6 || input.password.length > 128) {
+      return 'Mật khẩu mới cần từ 6–128 ký tự và không chỉ chứa khoảng trắng.';
+    }
+  }
+
+  if (trimmedHint.length > 120) {
+    return 'Gợi ý OTP tối đa 120 ký tự.';
+  }
+
+  if (input.requirePasswordAndOtp || trimmedOtp.length > 0) {
+    if (!/^\d{6}$/.test(trimmedOtp)) {
+      return input.requirePasswordAndOtp
+        ? 'Mã OTP phải gồm đúng 6 chữ số.'
+        : 'Mã OTP mới phải gồm đúng 6 chữ số.';
+    }
+  }
+
+  return null;
+}
+
 export function AdminDashboard({ initialData, storageStatus }: AdminDashboardProps) {
   const router = useRouter();
   const memoryFormRef = useRef<HTMLDivElement>(null);
   const activityRequestSeqRef = useRef(0);
-
-  const currentUser = initialData.currentUser ?? null;
 
   const [activeTab, setActiveTab] = useState<AdminTab>('memories');
   const [memories, setMemories] = useState<MemoryItem[]>(initialData.memories);
@@ -234,6 +274,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
     toSettingsForm(initialData.settings)
   );
   const [users, setUsers] = useState<SafeAppUser[]>(initialData.users ?? []);
+  const currentUser = useMemo(() => {
+    const initialCurrent = initialData.currentUser ?? null;
+    if (!initialCurrent) return null;
+    return users.find((u) => u.id === initialCurrent.id) ?? initialCurrent;
+  }, [initialData.currentUser, users]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>(
     initialData.activityLogs ?? []
   );
@@ -633,16 +678,16 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       showError('Tên đăng nhập gồm 3–32 ký tự chữ thường, số hoặc dấu . _ -.');
       return;
     }
-    if (!trimmedDisplay) {
-      showError('Vui lòng nhập tên hiển thị cho tài khoản.');
-      return;
-    }
-    if (!createUserForm.password.trim() || createUserForm.password.length < 6) {
-      showError('Mật khẩu mới cần ít nhất 6 ký tự.');
-      return;
-    }
-    if (!/^\d{6}$/.test(trimmedOtp)) {
-      showError('Mã OTP phải gồm đúng 6 chữ số.');
+
+    const fieldError = validateUserFormFields({
+      displayName: createUserForm.displayName,
+      password: createUserForm.password,
+      otpCode: createUserForm.otpCode,
+      otpHint: createUserForm.otpHint,
+      requirePasswordAndOtp: true,
+    });
+    if (fieldError) {
+      showError(fieldError);
       return;
     }
 
@@ -752,16 +797,15 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
     const trimmedDisplay = editUserForm.displayName.trim();
     const trimmedOtp = editUserForm.otpCode.trim();
-    if (!trimmedDisplay) {
-      showError('Tên hiển thị không được để trống.');
-      return;
-    }
-    if (editUserForm.password.length > 0 && editUserForm.password.length < 6) {
-      showError('Mật khẩu mới cần ít nhất 6 ký tự.');
-      return;
-    }
-    if (trimmedOtp.length > 0 && !/^\d{6}$/.test(trimmedOtp)) {
-      showError('Mã OTP mới phải gồm đúng 6 chữ số.');
+    const fieldError = validateUserFormFields({
+      displayName: editUserForm.displayName,
+      password: editUserForm.password,
+      otpCode: editUserForm.otpCode,
+      otpHint: editUserForm.otpHint,
+      requirePasswordAndOtp: false,
+    });
+    if (fieldError) {
+      showError(fieldError);
       return;
     }
 
@@ -846,6 +890,9 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       setConfirmDeleteUserId(null);
       if (editingUserId === targetUser.id) {
         setEditingUserId(null);
+      }
+      if (targetUser.username === activityUsernameFilter) {
+        setActivityUsernameFilter('');
       }
       showSuccess(`Đã xoá tài khoản @${targetUser.username}.`);
     } catch {
@@ -1021,18 +1068,18 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 : 'border-rose-200 bg-rose-50/95 text-rose-800'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 [overflow-wrap:anywhere]">
               {notice.type === 'success' ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
               ) : (
                 <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
               )}
-              <span>{notice.text}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{notice.text}</span>
             </div>
             <button
               type="button"
               onClick={() => setNotice(null)}
-              className="text-xs font-medium opacity-70 hover:opacity-100"
+              className="shrink-0 text-xs font-medium opacity-70 hover:opacity-100"
             >
               Đóng
             </button>
@@ -1770,8 +1817,8 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="min-w-0">
                   <label
                     htmlFor="new-user-username"
                     className="mb-1.5 block text-sm font-medium text-slate-700"
@@ -1782,16 +1829,17 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     id="new-user-username"
                     type="text"
                     required
+                    maxLength={32}
                     value={createUserForm.username}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, username: e.target.value }))
                     }
                     placeholder="VD: emyeu"
-                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="new-user-display-name"
                     className="mb-1.5 block text-sm font-medium text-slate-700"
@@ -1802,16 +1850,17 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     id="new-user-display-name"
                     type="text"
                     required
+                    maxLength={60}
                     value={createUserForm.displayName}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, displayName: e.target.value }))
                     }
                     placeholder="VD: Em bé thương yêu"
-                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="new-user-role"
                     className="mb-1.5 block text-sm font-medium text-slate-700"
@@ -1827,14 +1876,14 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                         role: e.target.value as UserRole,
                       }))
                     }
-                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   >
                     <option value="viewer">Người thương (chỉ xem /)</option>
                     <option value="admin">Quản trị &amp; Xem</option>
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="new-user-password"
                     className="mb-1.5 block text-sm font-medium text-slate-700"
@@ -1845,17 +1894,18 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     id="new-user-password"
                     type="password"
                     required
+                    maxLength={128}
                     value={createUserForm.password}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, password: e.target.value }))
                     }
                     placeholder="Ít nhất 6 ký tự..."
                     autoComplete="new-password"
-                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="new-user-otp"
                     className="mb-1.5 block text-sm font-medium text-slate-700"
@@ -1876,11 +1926,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                       }))
                     }
                     placeholder="VD: 121024"
-                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm tracking-widest text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm tracking-widest text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="new-user-otp-hint"
                     className="mb-1.5 block text-sm font-medium text-slate-700"
@@ -1890,12 +1940,13 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                   <input
                     id="new-user-otp-hint"
                     type="text"
+                    maxLength={120}
                     value={createUserForm.otpHint}
                     onChange={(e) =>
                       setCreateUserForm((prev) => ({ ...prev, otpHint: e.target.value }))
                     }
                     placeholder="VD: Ngày đầu tiên nắm tay nhau"
-                    className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   />
                 </div>
               </div>
@@ -1934,21 +1985,26 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 const lockDisabled = isSelf || isSoleActiveAdmin || busyUserId === u.id;
                 const revokeDisabled = isSelf || busyUserId === u.id;
                 const deleteDisabled = isSelf || isSoleActiveAdmin || busyUserId === u.id;
+                const roleLockedReason = isSelf
+                  ? 'Không thể tự đổi vai trò của tài khoản đang đăng nhập.'
+                  : isSoleActiveAdmin
+                    ? 'Không thể hạ quyền tài khoản quản trị hoạt động cuối cùng.'
+                    : undefined;
                 const isEditing = editingUserId === u.id;
 
                 return (
                   <article
                     key={u.id}
                     data-testid={`user-card-${u.id}`}
-                    className="glass-card space-y-4 rounded-3xl p-5 shadow-glass"
+                    className="glass-card min-w-0 max-w-full space-y-4 rounded-3xl p-5 shadow-glass"
                   >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="break-words font-serif text-xl font-semibold text-slate-900">
+                    <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 max-w-full flex-1 space-y-2">
+                        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+                          <h3 className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] font-serif text-xl font-semibold text-slate-900">
                             {u.displayName}
                           </h3>
-                          <span className="rounded-full border border-slate-200 bg-white/90 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                          <span className="max-w-full break-all rounded-full border border-slate-200 bg-white/90 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                             @{u.username}
                           </span>
                           <span
@@ -1976,18 +2032,18 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                           ) : null}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                          <span className="inline-flex items-center gap-1">
-                            <KeyRound className="h-3.5 w-3.5 text-pink-400" />
+                        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <span className="inline-flex min-w-0 items-center gap-1">
+                            <KeyRound className="h-3.5 w-3.5 shrink-0 text-pink-400" />
                             Phiên v{u.sessionVersion}
                           </span>
-                          <span>
+                          <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">
                             Đăng nhập cuối:{' '}
                             <strong className="font-medium text-slate-700">
                               {formatVietnamDateTime(u.lastLoginAt, 'Chưa từng đăng nhập')}
                             </strong>
                           </span>
-                          <span className="break-words">
+                          <span className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
                             Gợi ý OTP:{' '}
                             <strong className="font-medium text-slate-700">
                               {u.otpHint || 'Chưa thiết lập'}
@@ -2094,8 +2150,8 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                         onSubmit={(e) => handleSaveEditUser(e, u)}
                         className="space-y-4 rounded-2xl border border-pink-100 bg-white/80 p-4"
                       >
-                        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-                          <div>
+                        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                          <div className="min-w-0">
                             <label
                               htmlFor={`edit-display-${u.id}`}
                               className="mb-1 block text-xs font-medium text-slate-700"
@@ -2106,6 +2162,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                               id={`edit-display-${u.id}`}
                               type="text"
                               required
+                              maxLength={60}
                               value={editUserForm.displayName}
                               onChange={(e) =>
                                 setEditUserForm((prev) => ({
@@ -2113,11 +2170,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                                   displayName: e.target.value,
                                 }))
                               }
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                              className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                             />
                           </div>
 
-                          <div>
+                          <div className="min-w-0">
                             <label
                               htmlFor={`edit-role-${u.id}`}
                               className="mb-1 block text-xs font-medium text-slate-700"
@@ -2127,6 +2184,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                             <select
                               id={`edit-role-${u.id}`}
                               disabled={isSelf || isSoleActiveAdmin}
+                              title={roleLockedReason}
                               value={editUserForm.role}
                               onChange={(e) =>
                                 setEditUserForm((prev) => ({
@@ -2134,14 +2192,19 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                                   role: e.target.value as UserRole,
                                 }))
                               }
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200 disabled:bg-slate-100 disabled:text-slate-500"
+                              className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200 disabled:bg-slate-100 disabled:text-slate-500"
                             >
                               <option value="viewer">Người thương (chỉ xem /)</option>
                               <option value="admin">Quản trị &amp; Xem</option>
                             </select>
+                            {roleLockedReason ? (
+                              <p className="mt-1 text-[11px] leading-snug text-slate-500 [overflow-wrap:anywhere]">
+                                {roleLockedReason}
+                              </p>
+                            ) : null}
                           </div>
 
-                          <div>
+                          <div className="min-w-0">
                             <label
                               htmlFor={`edit-otp-hint-${u.id}`}
                               className="mb-1 block text-xs font-medium text-slate-700"
@@ -2151,6 +2214,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                             <input
                               id={`edit-otp-hint-${u.id}`}
                               type="text"
+                              maxLength={120}
                               value={editUserForm.otpHint}
                               onChange={(e) =>
                                 setEditUserForm((prev) => ({
@@ -2158,11 +2222,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                                   otpHint: e.target.value,
                                 }))
                               }
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                              className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                             />
                           </div>
 
-                          <div>
+                          <div className="min-w-0">
                             <label
                               htmlFor={`edit-password-${u.id}`}
                               className="mb-1 block text-xs font-medium text-slate-700"
@@ -2172,6 +2236,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                             <input
                               id={`edit-password-${u.id}`}
                               type="password"
+                              maxLength={128}
                               value={editUserForm.password}
                               onChange={(e) =>
                                 setEditUserForm((prev) => ({
@@ -2181,11 +2246,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                               }
                               placeholder="Tối thiểu 6 ký tự..."
                               autoComplete="new-password"
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                              className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                             />
                           </div>
 
-                          <div>
+                          <div className="min-w-0">
                             <label
                               htmlFor={`edit-otp-${u.id}`}
                               className="mb-1 block text-xs font-medium text-slate-700"
@@ -2205,7 +2270,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                                 }))
                               }
                               placeholder="6 chữ số..."
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tracking-widest text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                              className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tracking-widest text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                             />
                           </div>
                         </div>
@@ -2293,8 +2358,8 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               }}
               className="glass-card space-y-4 rounded-3xl p-4 shadow-glass sm:p-5"
             >
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="min-w-0">
                   <label
                     htmlFor="activity-event-filter"
                     className="mb-1 block text-xs font-medium text-slate-700"
@@ -2309,7 +2374,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                       setActivityEventFilter(next);
                       fetchActivityLogs({ eventType: next });
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   >
                     <option value="">Tất cả</option>
                     {ACTIVITY_EVENT_OPTIONS.map(([eventType, meta]) => (
@@ -2320,7 +2385,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="activity-user-filter"
                     className="mb-1 block text-xs font-medium text-slate-700"
@@ -2335,7 +2400,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                       setActivityUsernameFilter(next);
                       fetchActivityLogs({ username: next });
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   >
                     <option value="">Tất cả tài khoản</option>
                     <option value="khach">Khách ghé trang</option>
@@ -2347,14 +2412,14 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="activity-search"
                     className="mb-1 block text-xs font-medium text-slate-700"
                   >
                     Tìm kiếm nhật ký
                   </label>
-                  <div className="relative">
+                  <div className="relative min-w-0">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                     <input
                       id="activity-search"
@@ -2362,12 +2427,12 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                       value={activitySearch}
                       onChange={(e) => setActivitySearch(e.target.value)}
                       placeholder="Chi tiết, thiết bị..."
-                      className="w-full rounded-xl border border-slate-200 bg-white/95 py-2 pl-8 pr-3 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                      className="w-full min-w-0 rounded-xl border border-slate-200 bg-white/95 py-2 pl-8 pr-3 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                     />
                   </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="activity-limit"
                     className="mb-1 block text-xs font-medium text-slate-700"
@@ -2382,7 +2447,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                       setActivityLimit(next);
                       fetchActivityLogs({ limit: next });
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                    className="w-full min-w-0 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                   >
                     <option value="50">50 dòng</option>
                     <option value="100">100 dòng</option>
@@ -2390,7 +2455,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                   </select>
                 </div>
 
-                <div className="flex items-end">
+                <div className="flex min-w-0 items-end">
                   <button
                     type="submit"
                     disabled={loadingActivity}
@@ -2420,9 +2485,9 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     return (
                       <article
                         key={log.id}
-                        className="glass-card min-w-0 space-y-2.5 rounded-2xl p-4 shadow-glass"
+                        className="glass-card min-w-0 max-w-full space-y-2.5 rounded-2xl p-4 shadow-glass"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2">
                           <span
                             className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${eventMeta.badgeClass}`}
                           >
@@ -2433,8 +2498,8 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold text-slate-800">
+                        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+                          <span className="min-w-0 max-w-full break-all [overflow-wrap:anywhere] text-xs font-semibold text-slate-800">
                             @{log.username}
                           </span>
                           <span
@@ -2444,11 +2509,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                           </span>
                         </div>
 
-                        <p className="break-words text-sm text-slate-700">
+                        <p className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-sm text-slate-700">
                           {log.detail || eventMeta.label}
                         </p>
 
-                        <p className="break-words text-xs text-slate-400">
+                        <p className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-xs text-slate-400">
                           {log.deviceSummary || 'Không rõ thiết bị'}
                         </p>
                       </article>
@@ -2509,7 +2574,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                                 {eventMeta.label}
                               </span>
                             </td>
-                            <td className="max-w-xs break-words px-4 py-3 text-xs text-slate-700">
+                            <td className="max-w-xs break-words [overflow-wrap:anywhere] px-4 py-3 text-xs text-slate-700">
                               {log.detail || eventMeta.label}
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">

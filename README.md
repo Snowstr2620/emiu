@@ -15,16 +15,16 @@ Mở trình duyệt tại:
 - **Trang câu chuyện kỷ niệm (`/`):** `http://localhost:3000`
 - **Trang quản trị nội dung (`/admin`):** `http://localhost:3000/admin` (hoặc `/admin/login`)
 
-Tài khoản mẫu được tự động khởi tạo khi chạy cục bộ (`NODE_ENV !== 'production'`):
+Tài khoản mẫu được tự động khởi tạo ở lần thiết lập đầu tiên khi bảng tài khoản còn trống (áp dụng cho cả môi trường cục bộ lẫn lần khởi tạo đầu tiên trên production):
 - **Tài khoản Quản trị (`admin` — vừa xem `/` vừa quản trị `/admin`):**
   - Tên đăng nhập: `admin`
-  - Mật khẩu mặc định: `love2026` (hoặc giá trị từ biến `ADMIN_PASSWORD`)
-  - Mã OTP 6 số mặc định: `140226` (hoặc giá trị từ biến `ADMIN_DEFAULT_OTP`)
+  - Mật khẩu khởi tạo: ở chế độ cục bộ (`NODE_ENV !== 'production'`), mặc định là `love2026` nếu chưa đặt `ADMIN_PASSWORD`; ở môi trường **production** (`NODE_ENV === 'production'`), bắt buộc phải cấu hình `ADMIN_PASSWORD` khác `love2026`.
+  - Mã OTP 6 số khởi tạo: mặc định `140226` (hoặc giá trị 6 chữ số từ biến tuỳ chọn `ADMIN_DEFAULT_OTP`).
 - **Tài khoản Người thương (`viewer` — chỉ xem `/`):**
   - Tên đăng nhập: `nguoithuong`
-  - Mật khẩu mặc định: `love2026`
-  - Mã OTP 6 số mặc định: `121024`
-  - *Lưu ý bảo mật:* Ở môi trường cục bộ (`dev`), tài khoản `nguoithuong` được kích hoạt sẵn để thử nghiệm ngay. Khi khởi tạo database ở môi trường **production** (`NODE_ENV === 'production'`), tài khoản mẫu `nguoithuong` mặc định ở trạng thái **tạm khoá (`isActive: false`)** cho đến khi bạn đăng nhập `/admin` đổi mật khẩu/OTP riêng và mở khoá.
+  - Mật khẩu khởi tạo: `love2026`
+  - Mã OTP 6 số khởi tạo: `121024`
+  - *Lưu ý bảo mật:* Ở môi trường cục bộ (`dev`), tài khoản `nguoithuong` được kích hoạt sẵn (`isActive: true`) để thử nghiệm ngay. Khi khởi tạo database ở môi trường **production** (`NODE_ENV === 'production'`), tài khoản mẫu `nguoithuong` mặc định ở trạng thái **tạm khoá (`isActive: false`)** cho đến khi bạn đăng nhập `/admin` đổi mật khẩu/OTP riêng và mở khoá.
 
 ### Trải nghiệm 2 bước xác thực + Trái tim Pixel tại `/`
 1. **Bước 1 — Đăng nhập:** Nhập `Tên đăng nhập` + `Mật khẩu yêu thương`.
