@@ -10,6 +10,7 @@ import {
   VIEWER_STEP1_COOKIE_NAME,
   VIEWER_STEP1_TTL_SECONDS,
 } from '@/lib/auth';
+import { getProductionSetupHttpError } from '@/lib/seed-data';
 import { getStorageRepository } from '@/lib/storage';
 import { validateUserLoginPayload } from '@/lib/validation';
 
@@ -100,7 +101,11 @@ export async function POST(request: Request) {
       request
     );
     return response;
-  } catch {
+  } catch (err) {
+    const setupError = getProductionSetupHttpError(err);
+    if (setupError) {
+      return NextResponse.json({ error: setupError }, { status: 500 });
+    }
     return NextResponse.json({ error: 'Không thể đăng nhập lúc này.' }, { status: 500 });
   }
 }

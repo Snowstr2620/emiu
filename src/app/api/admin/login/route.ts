@@ -10,6 +10,7 @@ import {
   type UserSessionTokenPayload,
   verifyUserPasswordConstantTime,
 } from '@/lib/auth';
+import { getProductionSetupHttpError } from '@/lib/seed-data';
 import { getStorageRepository } from '@/lib/storage';
 import { validateUserLoginPayload } from '@/lib/validation';
 
@@ -106,7 +107,11 @@ export async function POST(request: Request) {
     });
     setCookieOnResponse(response, ADMIN_COOKIE_NAME, token, ADMIN_SESSION_TTL_SECONDS, request);
     return response;
-  } catch {
+  } catch (err) {
+    const setupError = getProductionSetupHttpError(err);
+    if (setupError) {
+      return NextResponse.json({ error: setupError }, { status: 500 });
+    }
     return NextResponse.json({ error: 'Không thể đăng nhập lúc này.' }, { status: 500 });
   }
 }

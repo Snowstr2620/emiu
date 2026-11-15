@@ -11,6 +11,17 @@ npm install
 npm run dev
 ```
 
+Nếu muốn chạy bản **production** trên máy cá nhân hoặc mạng LAN (`http://<IP-LAN>:3000`), hãy tạo tệp `.env.local` trước khi khởi động (xem mẫu trong [`.env.example`](./.env.example)), đặt `ADMIN_PASSWORD` **khác `love2026`** và `ADMIN_SESSION_SECRET` (tối thiểu 32 ký tự ngẫu nhiên):
+
+```bash
+# Ví dụ nội dung .env.local tối thiểu cho chế độ Cục bộ (production):
+# ADMIN_PASSWORD=MatKhauManhRiengCuaBan#2026
+# ADMIN_SESSION_SECRET=<chuỗi-ngẫu-nhiên-tạo-từ-openssl-rand-hex-32>
+
+npm run build
+npm run start
+```
+
 Mở trình duyệt tại:
 - **Trang câu chuyện kỷ niệm (`/`):** `http://localhost:3000`
 - **Trang quản trị nội dung (`/admin`):** `http://localhost:3000/admin` (hoặc `/admin/login`)

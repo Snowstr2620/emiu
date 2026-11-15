@@ -30,18 +30,33 @@ export interface LocalDbSchema {
 export const SEED_ADMIN_USER_ID = '00000000-0000-4000-8000-000000000001';
 export const SEED_VIEWER_USER_ID = '00000000-0000-4000-8000-000000000002';
 
+export class ProductionSetupError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProductionSetupError';
+  }
+}
+
+export function getProductionSetupHttpError(err: unknown): string | null {
+  if (!(err instanceof ProductionSetupError)) {
+    return null;
+  }
+  console.error('[NY Startup]', err.message);
+  return 'Máy chủ chưa cấu hình ADMIN_PASSWORD (khác love2026) hoặc ADMIN_DEFAULT_OTP hợp lệ trong .env.local để khởi tạo dữ liệu production.';
+}
+
 export function buildInitialUsers(now: string = new Date().toISOString()): AppUser[] {
   const isProd = process.env.NODE_ENV === 'production';
   const configuredAdminPass = process.env.ADMIN_PASSWORD?.trim() || '';
 
   if (isProd && (!configuredAdminPass || configuredAdminPass === 'love2026')) {
-    throw new Error('ADMIN_PASSWORD is required when initializing production database');
+    throw new ProductionSetupError('ADMIN_PASSWORD is required when initializing production database');
   }
 
   const adminPassword = configuredAdminPass || 'love2026';
   const configuredAdminOtp = process.env.ADMIN_DEFAULT_OTP?.trim();
   if (configuredAdminOtp && !/^\d{6}$/.test(configuredAdminOtp)) {
-    throw new Error('ADMIN_DEFAULT_OTP phải gồm đúng 6 chữ số (0-9) khi được cấu hình.');
+    throw new ProductionSetupError('ADMIN_DEFAULT_OTP phải gồm đúng 6 chữ số (0-9) khi được cấu hình.');
   }
   const adminOtp = configuredAdminOtp || '140226';
 

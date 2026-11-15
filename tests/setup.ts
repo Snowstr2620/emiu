@@ -2,6 +2,14 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
+// Isolate Vitest runs from operator .env.local values present in the workspace.
+delete process.env.ADMIN_PASSWORD;
+delete process.env.ADMIN_SESSION_SECRET;
+delete process.env.ADMIN_DEFAULT_OTP;
+delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+delete process.env.SUPABASE_STORAGE_BUCKET;
+
 afterEach(() => {
   cleanup();
 });
