@@ -4,8 +4,6 @@ import { describe, expect, test } from 'vitest';
 import {
   ADMIN_COOKIE_NAME,
   clearViewerCookiesOnResponse,
-  createAdminSessionToken,
-  createViewerSessionToken,
   GUEST_COOLDOWN_COOKIE_NAME,
   hashPasscode,
   resolveAdminSession,
@@ -13,11 +11,9 @@ import {
   sanitizeUserForClient,
   signSessionPayload,
   summarizeUserAgent,
-  verifyAdminSessionToken,
   verifyAdminTokenWithRepo,
   verifyPasscode,
   verifySessionPayload,
-  verifyViewerSessionToken,
   verifyViewerTokenWithRepo,
   VIEWER_STEP1_COOKIE_NAME,
   VIEWER_UNLOCKED_COOKIE_NAME,
@@ -40,24 +36,24 @@ import {
 } from '@/lib/validation';
 
 describe('auth & session tokens', () => {
+  const sampleAdminPayload: UserSessionTokenPayload = {
+    typ: 'admin',
+    sub: 'admin-id-1',
+    usr: 'admin',
+    ver: 1,
+    role: 'admin',
+    exp: 0,
+  };
+
   test('creates and verifies valid admin session token, rejecting tampered or expired tokens', () => {
-    const token = createAdminSessionToken(3600);
-    expect(verifyAdminSessionToken(token)).toBe(true);
-    expect(verifyAdminSessionToken(`${token}tampered`)).toBe(false);
-    expect(verifyAdminSessionToken('')).toBe(false);
-    expect(verifyAdminSessionToken(null)).toBe(false);
+    const token = signSessionPayload<UserSessionTokenPayload>(sampleAdminPayload, 3600);
+    expect(verifySessionPayload<UserSessionTokenPayload>(token, 'admin')?.sub).toBe('admin-id-1');
+    expect(verifySessionPayload<UserSessionTokenPayload>(`${token}tampered`, 'admin')).toBeNull();
+    expect(verifySessionPayload<UserSessionTokenPayload>('', 'admin')).toBeNull();
+    expect(verifySessionPayload<UserSessionTokenPayload>(null, 'admin')).toBeNull();
 
-    const expired = createAdminSessionToken(-10);
-    expect(verifyAdminSessionToken(expired)).toBe(false);
-  });
-
-  test('viewer session tokens are scoped separately from admin session tokens', () => {
-    const adminToken = createAdminSessionToken(3600);
-    const viewerToken = createViewerSessionToken(3600);
-
-    expect(verifyViewerSessionToken(viewerToken)).toBe(true);
-    expect(verifyViewerSessionToken(adminToken)).toBe(false);
-    expect(verifyAdminSessionToken(viewerToken)).toBe(false);
+    const expired = signSessionPayload<UserSessionTokenPayload>(sampleAdminPayload, -10);
+    expect(verifySessionPayload<UserSessionTokenPayload>(expired, 'admin')).toBeNull();
   });
 
   test('hashes and verifies viewer passcodes securely', () => {
@@ -75,18 +71,24 @@ describe('auth & session tokens', () => {
       // Mint token using dev fallback first
       (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
       delete process.env.ADMIN_SESSION_SECRET;
-      const devToken = createAdminSessionToken(3600);
-      expect(verifyAdminSessionToken(devToken)).toBe(true);
+      const devToken = signSessionPayload<UserSessionTokenPayload>(sampleAdminPayload, 3600);
+      expect(verifySessionPayload<UserSessionTokenPayload>(devToken, 'admin')?.sub).toBe(
+        'admin-id-1'
+      );
 
       // In production without ADMIN_SESSION_SECRET, signing must throw and verification must reject dev tokens
       (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
-      expect(() => createAdminSessionToken(3600)).toThrow(/ADMIN_SESSION_SECRET/);
-      expect(verifyAdminSessionToken(devToken)).toBe(false);
+      expect(() => signSessionPayload<UserSessionTokenPayload>(sampleAdminPayload, 3600)).toThrow(
+        /ADMIN_SESSION_SECRET/
+      );
+      expect(verifySessionPayload<UserSessionTokenPayload>(devToken, 'admin')).toBeNull();
 
       // With ADMIN_SESSION_SECRET set in production, signing and verifying succeed
       process.env.ADMIN_SESSION_SECRET = 'prod-strong-random-secret-key-32-chars';
-      const prodToken = createAdminSessionToken(3600);
-      expect(verifyAdminSessionToken(prodToken)).toBe(true);
+      const prodToken = signSessionPayload<UserSessionTokenPayload>(sampleAdminPayload, 3600);
+      expect(verifySessionPayload<UserSessionTokenPayload>(prodToken, 'admin')?.sub).toBe(
+        'admin-id-1'
+      );
     } finally {
       (process.env as Record<string, string | undefined>).NODE_ENV = origNodeEnv;
       if (origSecret === undefined) {

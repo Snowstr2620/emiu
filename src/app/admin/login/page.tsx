@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation';
-import { isAdminRequestAuthenticated, isUsingDefaultAdminPassword } from '@/lib/auth';
+import { isUsingDefaultAdminPassword, resolveAdminSession } from '@/lib/auth';
+import { getStorageRepository } from '@/lib/storage';
 import { AdminLoginForm } from '@/components/admin/AdminLoginForm';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminLoginPage() {
-  if (await isAdminRequestAuthenticated()) {
+  const repository = getStorageRepository();
+  if (await resolveAdminSession(repository)) {
     redirect('/admin');
   }
 

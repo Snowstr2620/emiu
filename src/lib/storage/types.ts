@@ -44,8 +44,6 @@ export interface ListActivityLogsFilter {
 export interface StorageRepository {
   getPublicData(): Promise<PublicSiteData>;
   getAdminData(currentUserId?: string | null): Promise<AdminSiteData>;
-  /** @deprecated Legacy global PIN check kept temporarily until Task 2 replaces /api/viewer/unlock. */
-  verifyViewerPasscode(pin: string): Promise<boolean>;
   updateSettings(input: ValidatedSettingsPayload): Promise<AdminSiteSettings>;
   createMemory(input: ValidatedMemoryPayload): Promise<MemoryItem>;
   updateMemory(id: string, input: ValidatedMemoryPayload): Promise<MemoryItem | null>;

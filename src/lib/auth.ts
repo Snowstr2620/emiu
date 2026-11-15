@@ -9,9 +9,6 @@ export const VIEWER_STEP1_COOKIE_NAME = 'ny_viewer_step1';
 export const VIEWER_UNLOCKED_COOKIE_NAME = 'ny_viewer_unlocked';
 export const GUEST_COOLDOWN_COOKIE_NAME = 'ny_guest_cooldown';
 
-/** @deprecated Use VIEWER_UNLOCKED_COOKIE_NAME instead. Kept until Task 2 replaces /api/viewer/unlock. */
-export const VIEWER_COOKIE_NAME = VIEWER_UNLOCKED_COOKIE_NAME;
-
 export const DEFAULT_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const ADMIN_SESSION_TTL_SECONDS = 24 * 60 * 60;
 export const VIEWER_STEP1_TTL_SECONDS = 10 * 60;
@@ -392,86 +389,14 @@ export function clearViewerCookiesOnResponse(response: NextResponse, request?: R
   clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
 }
 
-// =========================================================================
-// Temporary @deprecated legacy shims kept until Task 2 updates API routes
-// =========================================================================
+// Valid scrypt format (16-byte hex salt + 32-byte zero hash) used for constant-time dummy checks.
+const DUMMY_SCRYPT_HASH = `00112233445566778899aabbccddeeff:${'0'.repeat(64)}`;
 
-/** @deprecated Use user password verification against StorageRepository instead. */
-export function verifyAdminPassword(input: string): boolean {
-  const expected = getConfiguredAdminPassword();
-  if (!expected || !input) return false;
-  return safeEqualStrings(input, expected);
-}
-
-/** @deprecated Use signSessionPayload instead. */
-function signToken(prefix: 'admin' | 'viewer', ttlSeconds = DEFAULT_SESSION_TTL_SECONDS): string {
-  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const payload = `${prefix}.${exp}`;
-  const signature = crypto
-    .createHmac('sha256', getSessionSecret())
-    .update(payload)
-    .digest('base64url');
-  return `${payload}.${signature}`;
-}
-
-/** @deprecated Use verifySessionPayload instead. */
-function verifyToken(token: string | null | undefined, expectedPrefix: 'admin' | 'viewer'): boolean {
-  if (!token) return false;
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-
-  const [prefix, expStr, providedSig] = parts;
-  if (prefix !== expectedPrefix) return false;
-
-  const exp = Number(expStr);
-  if (!Number.isInteger(exp) || exp <= Math.floor(Date.now() / 1000)) {
-    return false;
-  }
-
-  const payload = `${prefix}.${expStr}`;
-  let secret: string;
-  try {
-    secret = getSessionSecret();
-  } catch {
-    return false;
-  }
-
-  const expectedSig = crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('base64url');
-
-  return safeEqualStrings(providedSig, expectedSig);
-}
-
-/** @deprecated Use signSessionPayload<UserSessionTokenPayload> instead. */
-export function createAdminSessionToken(ttlSeconds = DEFAULT_SESSION_TTL_SECONDS): string {
-  return signToken('admin', ttlSeconds);
-}
-
-/** @deprecated Use verifyAdminTokenWithRepo instead. */
-export function verifyAdminSessionToken(token?: string | null): boolean {
-  return verifyToken(token, 'admin');
-}
-
-/** @deprecated Use signSessionPayload<UserSessionTokenPayload> instead. */
-export function createViewerSessionToken(ttlSeconds = DEFAULT_SESSION_TTL_SECONDS): string {
-  return signToken('viewer', ttlSeconds);
-}
-
-/** @deprecated Use verifyViewerTokenWithRepo instead. */
-export function verifyViewerSessionToken(token?: string | null): boolean {
-  return verifyToken(token, 'viewer');
-}
-
-/** @deprecated Use resolveAdminSession(repository, request) instead. */
-export async function isAdminRequestAuthenticated(request?: Request): Promise<boolean> {
-  const token = await readCookieValue(ADMIN_COOKIE_NAME, request);
-  return verifyAdminSessionToken(token);
-}
-
-/** @deprecated Use resolveViewerSession(repository, request) instead. */
-export async function isViewerRequestUnlocked(request?: Request): Promise<boolean> {
-  const token = await readCookieValue(VIEWER_UNLOCKED_COOKIE_NAME, request);
-  return verifyViewerSessionToken(token);
+/**
+ * Always execute scrypt verification even when the username does not exist
+ * so response timing does not leak username existence.
+ */
+export function verifyUserPasswordConstantTime(password: string, user: AppUser | null): boolean {
+  const matched = verifyPasscode(password, user ? user.passwordHash : DUMMY_SCRYPT_HASH);
+  return Boolean(user) && matched;
 }

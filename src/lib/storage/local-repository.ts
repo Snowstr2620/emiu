@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { hashPasscode, verifyPasscode } from '@/lib/auth';
+import { hashPasscode } from '@/lib/auth';
 import {
   assertCanModifyActiveAdmin,
   computeTrafficSummary,
@@ -138,13 +138,6 @@ export class LocalStorageRepository implements StorageRepository {
       trafficSummary: computeTrafficSummary(db.activityLogs, db.users),
       currentUser,
     };
-  }
-
-  /** @deprecated Legacy global PIN check kept temporarily until Task 2 replaces /api/viewer/unlock. */
-  async verifyViewerPasscode(pin: string): Promise<boolean> {
-    const db = this.readDb();
-    if (!db.settings.viewerPasscodeEnabled) return true;
-    return verifyPasscode(pin, db.settings.viewerPasscodeHash || '');
   }
 
   async updateSettings(input: ValidatedSettingsPayload): Promise<AdminSiteSettings> {

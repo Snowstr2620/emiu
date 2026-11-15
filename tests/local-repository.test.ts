@@ -59,7 +59,7 @@ describe('LocalStorageRepository', () => {
     expect(verifyPasscode('121024', seededViewer!.otpHash)).toBe(true);
   });
 
-  test('updates settings, preserves passcode when omitted, and cleans old uploaded music only', async () => {
+  test('updates settings and cleans old uploaded music when replaced', async () => {
     const savedSong = await repo.saveLocalUpload({
       fileName: 'our-song.mp3',
       buffer: Buffer.from('fake-mp3-bytes'),
@@ -67,7 +67,7 @@ describe('LocalStorageRepository', () => {
     const uploadedSongDiskPath = path.join(uploadDir, path.basename(savedSong.publicUrl));
     expect(fs.existsSync(uploadedSongDiskPath)).toBe(true);
 
-    await repo.updateSettings({
+    const firstUpdate = await repo.updateSettings({
       coupleTitle: 'Hùng & Thảo',
       heroSubtitle: 'Chặng đường hai đứa mình',
       loveStartDate: '2024-10-12',
@@ -77,14 +77,12 @@ describe('LocalStorageRepository', () => {
       letterBody: 'Cảm ơn em đã luôn ở bên anh.',
       letterSignature: 'Thương em, Hùng',
       viewerPasscodeEnabled: true,
-      viewerPasscode: '1210',
     });
+    expect(firstUpdate.coupleTitle).toBe('Hùng & Thảo');
+    expect(firstUpdate.musicUrl).toBe(savedSong.publicUrl);
 
-    expect(await repo.verifyViewerPasscode('1210')).toBe(true);
-    expect(await repo.verifyViewerPasscode('9999')).toBe(false);
-
-    // Update settings again WITHOUT passing viewerPasscode -> must keep old passcode
-    await repo.updateSettings({
+    // Replace musicUrl with sample -> old uploaded song file is removed
+    const secondUpdate = await repo.updateSettings({
       coupleTitle: 'Hùng & Thảo 2026',
       heroSubtitle: 'Chặng đường hai đứa mình',
       loveStartDate: '2024-10-12',
@@ -93,10 +91,11 @@ describe('LocalStorageRepository', () => {
       letterTitle: 'Gửi em',
       letterBody: 'Cảm ơn em rất nhiều.',
       letterSignature: 'Hùng',
-      viewerPasscodeEnabled: true,
+      viewerPasscodeEnabled: false,
     });
 
-    expect(await repo.verifyViewerPasscode('1210')).toBe(true);
+    expect(secondUpdate.coupleTitle).toBe('Hùng & Thảo 2026');
+    expect(secondUpdate.viewerPasscodeEnabled).toBe(false);
     expect(fs.existsSync(uploadedSongDiskPath)).toBe(false);
   });
 

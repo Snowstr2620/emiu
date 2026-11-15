@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { isAdminRequestAuthenticated } from '@/lib/auth';
+import { requireAdminApiSession } from '@/lib/admin-guard';
 import { getStorageRepository } from '@/lib/storage';
 import { UploadKind, validateUploadRequest } from '@/lib/validation';
 
 export async function POST(request: Request) {
-  if (!(await isAdminRequestAuthenticated(request))) {
-    return NextResponse.json({ error: 'Bạn cần đăng nhập quản trị.' }, { status: 401 });
-  }
   try {
+    const repo = getStorageRepository();
+    const auth = await requireAdminApiSession(request, repo);
+    if (!auth.ok) return auth.response;
+
     const body = (await request.json().catch(() => null)) as {
       kind?: unknown;
       mimeType?: unknown;
@@ -34,7 +35,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: check.error }, { status: 400 });
     }
 
-    const repo = getStorageRepository();
     if (repo.createSignedUploadUrl) {
       const target = await repo.createSignedUploadUrl({
         kind,

@@ -1,4 +1,4 @@
-import { isViewerRequestUnlocked } from '@/lib/auth';
+import { resolveViewerSession } from '@/lib/auth';
 import { getStorageRepository } from '@/lib/storage';
 import { StoryExperience } from '@/components/story/StoryExperience';
 import { ViewerPasscodeGate } from '@/components/story/ViewerPasscodeGate';
@@ -10,8 +10,8 @@ export default async function HomePage() {
   const data = await repository.getPublicData();
 
   if (data.settings.viewerPasscodeEnabled) {
-    const unlocked = await isViewerRequestUnlocked();
-    if (!unlocked) {
+    const viewerSession = await resolveViewerSession(repository);
+    if (viewerSession.stage !== 'unlocked') {
       return <ViewerPasscodeGate coupleTitle={data.settings.coupleTitle} />;
     }
   }

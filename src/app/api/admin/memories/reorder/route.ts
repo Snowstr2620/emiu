@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
-import { isAdminRequestAuthenticated } from '@/lib/auth';
+import { requireAdminApiSession } from '@/lib/admin-guard';
 import { getStorageRepository } from '@/lib/storage';
 
 export async function PUT(request: Request) {
-  if (!(await isAdminRequestAuthenticated(request))) {
-    return NextResponse.json({ error: 'Bạn cần đăng nhập quản trị.' }, { status: 401 });
-  }
   try {
+    const repo = getStorageRepository();
+    const auth = await requireAdminApiSession(request, repo);
+    if (!auth.ok) return auth.response;
+
     const body = (await request.json().catch(() => null)) as { ids?: unknown } | null;
     if (!Array.isArray(body?.ids) || body.ids.some((id) => typeof id !== 'string')) {
       return NextResponse.json({ error: 'Danh sách sắp xếp không hợp lệ.' }, { status: 400 });
     }
 
-    const repo = getStorageRepository();
     const memories = await repo.reorderMemories(body.ids);
     return NextResponse.json({ memories });
   } catch (err) {

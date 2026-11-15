@@ -238,7 +238,7 @@ export function ensureSeededUsersAndUpgrade(raw: Partial<LocalDbSchema>): {
 
 export function computeTrafficSummary(
   logs: ActivityLogItem[],
-  users: AppUser[],
+  users: Array<Pick<AppUser, 'isActive'>>,
   now: Date = new Date()
 ): TrafficSummary {
   const todayVn = getVietnamCalendarDateParts(now);

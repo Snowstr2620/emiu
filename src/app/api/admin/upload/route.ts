@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { isAdminRequestAuthenticated } from '@/lib/auth';
+import { requireAdminApiSession } from '@/lib/admin-guard';
 import { getStorageRepository } from '@/lib/storage';
 import { UploadKind, validateUploadRequest } from '@/lib/validation';
 
 export async function POST(request: Request) {
-  if (!(await isAdminRequestAuthenticated(request))) {
-    return NextResponse.json({ error: 'Bạn cần đăng nhập quản trị.' }, { status: 401 });
-  }
   try {
+    const repo = getStorageRepository();
+    const auth = await requireAdminApiSession(request, repo);
+    if (!auth.ok) return auth.response;
+
     const formData = await request.formData();
     const rawKind = formData.get('kind');
     const file = formData.get('file');
@@ -29,7 +30,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: check.error }, { status: 400 });
     }
 
-    const repo = getStorageRepository();
     if (!repo.saveLocalUpload) {
       return NextResponse.json(
         { error: 'Chế độ đám mây sử dụng Signed Upload URL thay cho endpoint cục bộ.' },
@@ -51,17 +51,17 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!(await isAdminRequestAuthenticated(request))) {
-    return NextResponse.json({ error: 'Bạn cần đăng nhập quản trị.' }, { status: 401 });
-  }
   try {
+    const repo = getStorageRepository();
+    const auth = await requireAdminApiSession(request, repo);
+    if (!auth.ok) return auth.response;
+
     const body = (await request.json().catch(() => null)) as { url?: unknown } | null;
     const url = typeof body?.url === 'string' ? body.url.trim() : '';
     if (!url) {
       return NextResponse.json({ error: 'Thiếu đường dẫn tệp cần dọn.' }, { status: 400 });
     }
 
-    const repo = getStorageRepository();
     await repo.deleteStoredFileByUrl(url);
     return NextResponse.json({ ok: true });
   } catch (err) {

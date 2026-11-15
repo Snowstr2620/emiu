@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { hashPasscode, verifyPasscode } from '@/lib/auth';
+import { hashPasscode } from '@/lib/auth';
 import {
   assertCanModifyActiveAdmin,
   buildInitialUsers,
@@ -378,13 +378,6 @@ export class SupabaseStorageRepository implements StorageRepository {
       trafficSummary: computeTrafficSummary(activityLogs, rawUsers),
       currentUser,
     };
-  }
-
-  /** @deprecated Legacy global PIN check kept temporarily until Task 2 replaces /api/viewer/unlock. */
-  async verifyViewerPasscode(pin: string): Promise<boolean> {
-    const { settings } = await this.ensureInitializedAndFetch();
-    if (!settings.viewerPasscodeEnabled) return true;
-    return verifyPasscode(pin, settings.viewerPasscodeHash || '');
   }
 
   async updateSettings(input: ValidatedSettingsPayload): Promise<AdminSiteSettings> {
