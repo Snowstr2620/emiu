@@ -1,6 +1,6 @@
 # Hành Trình Kỷ Niệm Của Tụi Mình
 
-Website lưu giữ những bức ảnh kỷ niệm, bộ đếm ngày bên nhau theo múi giờ Việt Nam (`Asia/Ho_Chi_Minh`), nhạc nền nhẹ nhàng, màn giới thiệu `<canvas>` trái tim pixel ghép nối và phong thư tâm sự dành riêng cho người thương — thiết kế theo phong cách **Trắng Tinh Khôi & Kính Mờ Pastel**.
+Website lưu giữ những bức ảnh kỷ niệm, bộ đếm ngày bên nhau theo múi giờ Việt Nam (`Asia/Ho_Chi_Minh`), nhạc nền nhẹ nhàng, màn giới thiệu `<canvas>` trái tim pixel ghép nối và phong thư tâm sự dành riêng cho người thương — thiết kế theo phong cách **Godly Dark Velvet & Crimson-Rose (Đỏ & Hồng)**.
 
 ## 1. Chạy ngay trên máy cá nhân (Local Mode)
 
@@ -29,7 +29,7 @@ Tài khoản mẫu được tự động khởi tạo ở lần thiết lập đ
 ### Trải nghiệm 2 bước xác thực + Trái tim Pixel tại `/`
 1. **Bước 1 — Đăng nhập:** Nhập `Tên đăng nhập` + `Mật khẩu yêu thương`.
 2. **Bước 2 — Xác thực OTP 6 số:** Nhập 6 chữ số kỷ niệm (hỗ trợ tự nhảy ô và dán 6 số kèm gợi ý OTP riêng của tài khoản).
-3. **Bước 3 — Trái tim Pixel & Hành trình kỷ niệm:** Sau khi OTP hợp lệ, màn hình `<canvas>` trái tim pixel pastel hội tụ và đập nhịp trước khi bước vào dòng thời gian kỷ niệm cùng hiệu ứng tình yêu dịu nhẹ.
+3. **Bước 3 — Trái tim Pixel & Hành trình kỷ niệm:** Sau khi OTP hợp lệ, màn hình `<canvas>` trái tim pixel đỏ hồng hội tụ và đập nhịp trước khi bước vào dòng thời gian kỷ niệm cùng hiệu ứng tình yêu dịu nhẹ.
 
 Trong chế độ cục bộ, dữ liệu được lưu tại `data/local-db.json` và tệp tải lên nằm trong `public/uploads/`.
 

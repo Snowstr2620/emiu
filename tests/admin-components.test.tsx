@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import { AdminLoginForm } from '@/components/admin/AdminLoginForm';
 import type {
+  ActivityEventType,
   ActivityLogItem,
   AdminSiteData,
   SafeAppUser,
@@ -243,6 +244,38 @@ describe('AdminLoginForm', () => {
     vi.stubEnv('NODE_ENV', 'production');
     rerender(<AdminLoginForm showDevDefaultHint={true} />);
     expect(screen.queryByText('love2026')).not.toBeInTheDocument();
+  });
+
+  test('renders in Dark Velvet & Crimson-Rose theme with zero sky/indigo/blue/violet/purple/slate/bg-white classes', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const { container } = render(<AdminLoginForm showDevDefaultHint={true} />);
+
+    expect(container.firstElementChild).toHaveClass('overflow-x-hidden');
+
+    const usernameInput = screen.getByLabelText(/Tài khoản quản trị/i);
+    const passwordInput = screen.getByLabelText(/Mật khẩu quản trị/i);
+    expect(usernameInput).toHaveClass('bg-[#0d0408]/90', 'text-rose-50', 'text-base', 'sm:text-sm');
+    expect(passwordInput).toHaveClass('bg-[#0d0408]/90', 'text-rose-50', 'text-base', 'sm:text-sm');
+
+    const submitBtn = screen.getByRole('button', { name: /Vào trang quản trị/i });
+    expect(submitBtn).toHaveClass('to-pink-600', 'text-white');
+
+    const classTokens = Array.from(container.querySelectorAll('[class]')).flatMap((el) =>
+      (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+    );
+    for (const token of classTokens) {
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
+      expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40)$/);
+      const opacityMatch = token.match(
+        /^(?:[a-z0-9-]+:)*(?:bg|text|border|ring|from|via|to|divide|placeholder|fill|stroke)-.*\/(\d+)$/
+      );
+      if (opacityMatch) {
+        expect(Number(opacityMatch[1]) % 5).toBe(0);
+      }
+    }
+    expect(container.innerHTML.toLowerCase()).not.toContain('#bae6fd');
   });
 });
 
@@ -960,5 +993,122 @@ describe('AdminDashboard 5-tab UI', () => {
       expect(mockPush).toHaveBeenCalledWith('/admin/login');
       expect(mockRefresh).toHaveBeenCalled();
     });
+  });
+
+  test('renders Dark Velvet & Crimson-Rose styling across all 5 tabs, dark <option> controls, and zero legacy sky/indigo/blue/violet/purple/slate/bg-white classes', async () => {
+    const user = userEvent.setup();
+    const allEventTypes: ActivityEventType[] = [
+      'page_visit',
+      'page_leave',
+      'login_step1_ok',
+      'login_failed',
+      'otp_verified',
+      'otp_failed',
+      'pixel_heart_viewed',
+      'music_toggled',
+      'memory_viewed',
+      'letter_opened',
+      'logout',
+    ];
+    const allLogs: ActivityLogItem[] = allEventTypes.map((eventType, idx) => ({
+      id: `log-palette-${idx}`,
+      userId: idx % 3 === 0 ? ADMIN_USER.id : idx % 3 === 1 ? VIEWER_USER.id : null,
+      username: idx % 3 === 0 ? 'admin' : idx % 3 === 1 ? 'nguoithuong' : 'khach',
+      userRole: idx % 3 === 0 ? 'admin' : idx % 3 === 1 ? 'viewer' : 'guest',
+      eventType,
+      detail: `Sự kiện ${eventType}`,
+      deviceSummary: 'Chrome · macOS',
+      metadata: null,
+      createdAt: '2026-11-15T10:05:30.000Z',
+    }));
+
+    function assertDarkVelvetTheme(root: HTMLElement) {
+      const classTokens = Array.from(root.querySelectorAll('[class]')).flatMap((el) =>
+        (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+      );
+      for (const token of classTokens) {
+        expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
+        expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+        expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
+        expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40)$/);
+        const opacityMatch = token.match(
+          /^(?:[a-z0-9-]+:)*(?:bg|text|border|ring|from|via|to|divide|placeholder|fill|stroke)-.*\/(\d+)$/
+        );
+        if (opacityMatch) {
+          expect(Number(opacityMatch[1]) % 5).toBe(0);
+        }
+      }
+
+      const selectOptions = root.querySelectorAll('select option');
+      for (const opt of selectOptions) {
+        expect(opt).toHaveClass('bg-[#16080f]', 'text-rose-50');
+      }
+    }
+
+    const inactiveSecondAdmin: SafeAppUser = { ...SECOND_ADMIN_USER, isActive: false };
+    const initial = makeInitialData({
+      users: [ADMIN_USER, VIEWER_USER, inactiveSecondAdmin],
+      activityLogs: allLogs,
+    });
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ settings: initial.settings }), { status: 200 })
+    );
+
+    const { container, rerender } = render(
+      <AdminDashboard
+        initialData={initial}
+        storageStatus={{
+          mode: 'local',
+          readOnlyServerlessWarning: true,
+          usingDefaultAdminPassword: true,
+          usingDefaultSessionSecret: true,
+        }}
+      />
+    );
+
+    // Tab 1: open form + open delete confirmation
+    assertDarkVelvetTheme(container);
+    await user.click(screen.getByRole('button', { name: /Thêm kỷ niệm mới/i }));
+    assertDarkVelvetTheme(container);
+    await user.click(screen.getByRole('button', { name: /^Huỷ$/i }));
+    await user.click(screen.getByRole('button', { name: /^Xoá$/i }));
+    assertDarkVelvetTheme(container);
+
+    // Tab 2: settings + trigger success toast
+    await user.click(screen.getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i }));
+    assertDarkVelvetTheme(container);
+    await user.click(screen.getByRole('button', { name: /Lưu cài đặt/i }));
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    assertDarkVelvetTheme(container);
+
+    // Tab 3: letter & preview
+    await user.click(screen.getByRole('button', { name: /Phong thư tâm sự/i }));
+    assertDarkVelvetTheme(container);
+
+    // Tab 4: create form + user cards + inline edit form + inline delete confirm
+    await user.click(screen.getByRole('button', { name: /Tài khoản & Kiểm soát truy cập/i }));
+    expect(container.querySelectorAll('#new-user-role option')).toHaveLength(2);
+    const adminCard = screen.getByTestId(`user-card-${ADMIN_USER.id}`);
+    await user.click(within(adminCard).getByRole('button', { name: /^Sửa$/i }));
+    expect(
+      container.querySelectorAll(`#edit-role-${ADMIN_USER.id} option`)
+    ).toHaveLength(2);
+    const viewerCard = screen.getByTestId(`user-card-${VIEWER_USER.id}`);
+    await user.click(within(viewerCard).getByRole('button', { name: /^Xoá$/i }));
+    assertDarkVelvetTheme(container);
+
+    // Tab 5: stat cards + filter selects + all 11 event badges + mobile/desktop views
+    await user.click(screen.getByRole('button', { name: /Nhật ký ra vào & Hành động/i }));
+    expect(container.querySelectorAll('select option').length).toBeGreaterThanOrEqual(16);
+    assertDarkVelvetTheme(container);
+
+    // Supabase mode + empty memories/logs state
+    rerender(
+      <AdminDashboard
+        initialData={makeInitialData({ memories: [], activityLogs: [] })}
+        storageStatus={{ ...STORAGE_STATUS, mode: 'supabase' }}
+      />
+    );
+    assertDarkVelvetTheme(container);
   });
 });
