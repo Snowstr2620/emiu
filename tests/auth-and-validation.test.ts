@@ -42,6 +42,35 @@ describe('auth & session tokens', () => {
     expect(verifyPasscode('0000', hash)).toBe(false);
     expect(verifyPasscode('', hash)).toBe(false);
   });
+
+  test('fails closed in production when ADMIN_SESSION_SECRET is missing', () => {
+    const origNodeEnv = process.env.NODE_ENV;
+    const origSecret = process.env.ADMIN_SESSION_SECRET;
+    try {
+      // Mint token using dev fallback first
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
+      delete process.env.ADMIN_SESSION_SECRET;
+      const devToken = createAdminSessionToken(3600);
+      expect(verifyAdminSessionToken(devToken)).toBe(true);
+
+      // In production without ADMIN_SESSION_SECRET, signing must throw and verification must reject dev tokens
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+      expect(() => createAdminSessionToken(3600)).toThrow(/ADMIN_SESSION_SECRET/);
+      expect(verifyAdminSessionToken(devToken)).toBe(false);
+
+      // With ADMIN_SESSION_SECRET set in production, signing and verifying succeed
+      process.env.ADMIN_SESSION_SECRET = 'prod-strong-random-secret-key-32-chars';
+      const prodToken = createAdminSessionToken(3600);
+      expect(verifyAdminSessionToken(prodToken)).toBe(true);
+    } finally {
+      (process.env as Record<string, string | undefined>).NODE_ENV = origNodeEnv;
+      if (origSecret === undefined) {
+        delete process.env.ADMIN_SESSION_SECRET;
+      } else {
+        process.env.ADMIN_SESSION_SECRET = origSecret;
+      }
+    }
+  });
 });
 
 describe('upload validation & sanitization', () => {
@@ -114,6 +143,26 @@ describe('upload validation & sanitization', () => {
       fileName: 'empty.jpg',
     });
     expect(emptyRes.valid).toBe(false);
+
+    // Extension allowlist blocks spoofed XHTML/XML/SVGZ/extensionless files even with allowed MIME
+    for (const badName of ['payload.xhtml', 'bad.xml', 'pic.svgz', 'shell.phtml', 'noext']) {
+      const spoofed = validateUploadRequest({
+        kind: 'image',
+        mimeType: 'image/jpeg',
+        size: 1024,
+        fileName: badName,
+      });
+      expect(spoofed.valid).toBe(false);
+    }
+
+    expect(
+      validateUploadRequest({
+        kind: 'audio',
+        mimeType: 'audio/m4a',
+        size: 2048,
+        fileName: 'voice.m4a',
+      })
+    ).toEqual({ valid: true });
   });
 
   test('sanitizes filenames against path traversal and unsafe characters', () => {

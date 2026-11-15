@@ -33,6 +33,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ settings });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Không thể lưu cài đặt.';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message.includes('mã mở khoá') ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

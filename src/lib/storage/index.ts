@@ -1,4 +1,4 @@
-import { isUsingDefaultAdminPassword } from '@/lib/auth';
+import { isSessionSecretConfigured, isUsingDefaultAdminPassword } from '@/lib/auth';
 import { LocalStorageRepository } from '@/lib/storage/local-repository';
 import { SupabaseStorageRepository } from '@/lib/storage/supabase-repository';
 import { StorageRepository } from '@/lib/storage/types';
@@ -25,5 +25,6 @@ export function getStorageStatus(): StorageStatus {
     mode: cloud ? 'supabase' : 'local',
     readOnlyServerlessWarning: !cloud && runningOnServerless,
     usingDefaultAdminPassword: isUsingDefaultAdminPassword(),
+    usingDefaultSessionSecret: !isSessionSecretConfigured(),
   };
 }

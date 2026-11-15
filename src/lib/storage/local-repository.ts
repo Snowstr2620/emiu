@@ -8,7 +8,13 @@ import {
   stripSettingsForAdmin,
   stripSettingsForPublic,
 } from '@/lib/seed-data';
-import { sanitizeStorageFileName, ValidatedMemoryPayload, ValidatedSettingsPayload } from '@/lib/validation';
+import {
+  ALLOWED_AUDIO_EXTENSIONS,
+  ALLOWED_IMAGE_EXTENSIONS,
+  sanitizeStorageFileName,
+  ValidatedMemoryPayload,
+  ValidatedSettingsPayload,
+} from '@/lib/validation';
 import { StorageRepository } from '@/lib/storage/types';
 import { AdminSiteData, AdminSiteSettings, MemoryItem, PublicSiteData } from '@/types/memories';
 
@@ -32,19 +38,31 @@ export class LocalStorageRepository implements StorageRepository {
   }
 
   private readDb(): LocalDbSchema {
-    fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
-    fs.mkdirSync(this.uploadDir, { recursive: true });
-
-    if (!fs.existsSync(this.dbPath)) {
-      const seed = createInitialSeedData();
-      this.writeDb(seed);
-      return seed;
+    if (process.env.VERCEL && !fs.existsSync(this.dbPath)) {
+      return createInitialSeedData();
     }
 
-    const raw = fs.readFileSync(this.dbPath, 'utf8');
-    const parsed = JSON.parse(raw) as LocalDbSchema;
-    parsed.memories.sort((a, b) => a.sortOrder - b.sortOrder);
-    return parsed;
+    try {
+      fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
+      fs.mkdirSync(this.uploadDir, { recursive: true });
+
+      if (!fs.existsSync(this.dbPath)) {
+        const seed = createInitialSeedData();
+        this.writeDb(seed);
+        return seed;
+      }
+
+      const raw = fs.readFileSync(this.dbPath, 'utf8');
+      const parsed = JSON.parse(raw) as LocalDbSchema;
+      parsed.memories.sort((a, b) => a.sortOrder - b.sortOrder);
+      return parsed;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code === 'EROFS' || code === 'EACCES' || code === 'EPERM') {
+        return createInitialSeedData();
+      }
+      throw err;
+    }
   }
 
   private writeDb(data: LocalDbSchema): void {
@@ -83,6 +101,10 @@ export class LocalStorageRepository implements StorageRepository {
     const nextHash = input.viewerPasscode
       ? hashPasscode(input.viewerPasscode)
       : db.settings.viewerPasscodeHash;
+
+    if (input.viewerPasscodeEnabled && !nextHash) {
+      throw new Error('Vui lòng đặt mã mở khoá trước khi bật chế độ riêng tư.');
+    }
 
     db.settings = {
       coupleTitle: input.coupleTitle,
@@ -189,8 +211,13 @@ export class LocalStorageRepository implements StorageRepository {
     fileName: string;
     buffer: Buffer;
   }): Promise<{ publicUrl: string }> {
-    fs.mkdirSync(this.uploadDir, { recursive: true });
     const safeName = sanitizeStorageFileName(input.fileName);
+    const ext = path.posix.extname(safeName.toLowerCase());
+    if (!ALLOWED_IMAGE_EXTENSIONS.has(ext) && !ALLOWED_AUDIO_EXTENSIONS.has(ext)) {
+      throw new Error('Đuôi tệp không thuộc danh sách được phép tải lên.');
+    }
+
+    fs.mkdirSync(this.uploadDir, { recursive: true });
     const uniqueName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
     const targetPath = path.join(this.uploadDir, uniqueName);
     fs.writeFileSync(targetPath, input.buffer);

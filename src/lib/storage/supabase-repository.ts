@@ -81,15 +81,31 @@ export class SupabaseStorageRepository implements StorageRepository {
   private readonly supabaseUrl: string;
   private readonly bucket: string;
 
-  constructor() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-    if (!url || !key) {
+  constructor(options?: {
+    client?: SupabaseClient;
+    supabaseUrl?: string;
+    bucket?: string;
+  }) {
+    const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const envKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+    this.bucket =
+      options?.bucket?.trim() || process.env.SUPABASE_STORAGE_BUCKET?.trim() || 'love-memories';
+
+    if (options?.client) {
+      this.client = options.client;
+      this.supabaseUrl = (options.supabaseUrl || envUrl || 'https://supabase.local').replace(
+        /\/+$/,
+        ''
+      );
+      return;
+    }
+
+    if (!envUrl || !envKey) {
       throw new Error('Supabase environment variables are missing.');
     }
-    this.supabaseUrl = url.replace(/\/+$/, '');
-    this.bucket = process.env.SUPABASE_STORAGE_BUCKET?.trim() || 'love-memories';
-    this.client = createClient(this.supabaseUrl, key, {
+    this.supabaseUrl = envUrl.replace(/\/+$/, '');
+    this.client = createClient(this.supabaseUrl, envKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
   }
@@ -138,11 +154,14 @@ export class SupabaseStorageRepository implements StorageRepository {
       }
       settings = mapSettingsRow(inserted);
 
-      const { count } = await this.client
+      const { count, error: countError } = await this.client
         .from('memories')
         .select('id', { count: 'exact', head: true });
+      if (countError) {
+        throw new Error(`Lỗi kiểm tra bảng memories trên Supabase: ${countError.message}`);
+      }
       if (!count) {
-        await this.client.from('memories').insert(
+        const { error: memSeedError } = await this.client.from('memories').upsert(
           seed.memories.map((m) => ({
             id: m.id,
             memory_date: m.memoryDate,
@@ -151,8 +170,12 @@ export class SupabaseStorageRepository implements StorageRepository {
             image_url: m.imageUrl,
             image_alt: m.imageAlt,
             sort_order: m.sortOrder,
-          }))
+          })),
+          { onConflict: 'id', ignoreDuplicates: true }
         );
+        if (memSeedError) {
+          throw new Error(`Không thể khởi tạo dữ liệu kỷ niệm mẫu Supabase: ${memSeedError.message}`);
+        }
       }
     } else {
       settings = mapSettingsRow(settingsRow);
@@ -202,6 +225,10 @@ export class SupabaseStorageRepository implements StorageRepository {
     const nextHash = input.viewerPasscode
       ? hashPasscode(input.viewerPasscode)
       : current.viewerPasscodeHash;
+
+    if (input.viewerPasscodeEnabled && !nextHash) {
+      throw new Error('Vui lòng đặt mã mở khoá trước khi bật chế độ riêng tư.');
+    }
 
     const { data, error } = await this.client
       .from('site_settings')
@@ -332,11 +359,15 @@ export class SupabaseStorageRepository implements StorageRepository {
       orderedIds.push(leftover);
     }
 
-    await Promise.all(
+    const reorderResults = await Promise.all(
       orderedIds.map((id, index) =>
         this.client.from('memories').update({ sort_order: index }).eq('id', id)
       )
     );
+    const failedUpdate = reorderResults.find((result) => result.error);
+    if (failedUpdate?.error) {
+      throw new Error(`Không thể sắp xếp lại kỷ niệm trên Supabase: ${failedUpdate.error.message}`);
+    }
 
     const refreshed = await this.ensureInitializedAndFetch();
     return refreshed.memories;

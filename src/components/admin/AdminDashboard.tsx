@@ -534,12 +534,13 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
           </div>
         ) : null}
 
-        {storageStatus.usingDefaultAdminPassword ? (
+        {storageStatus.usingDefaultAdminPassword || storageStatus.usingDefaultSessionSecret ? (
           <div className="flex items-center gap-2.5 rounded-2xl border border-indigo-200/80 bg-indigo-50/80 px-4 py-3 text-xs text-indigo-800">
             <Lock className="h-4 w-4 shrink-0 text-indigo-600" />
             <span>
-              Đang dùng mật khẩu quản trị mặc định (<code>love2026</code>). Hãy đặt biến{' '}
-              <code>ADMIN_PASSWORD</code> và <code>SESSION_SECRET</code> trước khi chia sẻ công khai.
+              Chế độ phát triển đang dùng cấu hình bảo mật mặc định. Hãy đặt{' '}
+              <code>ADMIN_PASSWORD</code> và <code>ADMIN_SESSION_SECRET</code> trong biến môi
+              trường trước khi triển khai công khai.
             </span>
           </div>
         ) : null}
@@ -1198,15 +1199,15 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 >
                   Chữ ký cuối thư
                 </label>
-                <input
+                <textarea
                   id="letter-signature"
-                  type="text"
+                  rows={2}
                   value={settingsForm.letterSignature}
                   onChange={(e) =>
                     setSettingsForm((prev) => ({ ...prev, letterSignature: e.target.value }))
                   }
-                  placeholder="VD: Thương em nhiều, Anh"
-                  className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
+                  placeholder="VD: Thương em thật nhiều,&#10;Anh của em ♥"
+                  className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm leading-relaxed text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200"
                 />
               </div>
 
@@ -1243,7 +1244,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                     )}
                   </div>
                   {settingsForm.letterSignature ? (
-                    <p className="mt-8 text-right font-serif text-xl italic text-pink-700">
+                    <p className="mt-8 whitespace-pre-line text-right font-serif text-xl italic text-pink-700">
                       {settingsForm.letterSignature}
                     </p>
                   ) : null}

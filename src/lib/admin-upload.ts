@@ -14,15 +14,30 @@ interface LocalUploadResponse {
   uploadEndpoint: string;
 }
 
+function inferMimeType(file: File): string {
+  if (file.type?.trim()) return file.type;
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.m4a')) return 'audio/mp4';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  return '';
+}
+
 export async function uploadMediaFile(file: File, kind: UploadKind): Promise<string> {
   const processed = kind === 'image' ? await compressImageIfNeeded(file) : file;
+  const mimeType = inferMimeType(processed);
 
   const prepRes = await fetch('/api/admin/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       kind,
-      mimeType: processed.type || '',
+      mimeType,
       size: processed.size,
       fileName: processed.name || 'upload',
     }),
@@ -42,7 +57,7 @@ export async function uploadMediaFile(file: File, kind: UploadKind): Promise<str
     const putRes = await fetch(prepPayload.signedUrl, {
       method: 'PUT',
       headers: {
-        'Content-Type': processed.type || 'application/octet-stream',
+        'Content-Type': mimeType || 'application/octet-stream',
         'cache-control': 'max-age=3600',
         'x-upsert': 'false',
       },

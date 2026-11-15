@@ -4,6 +4,8 @@ import {
   createAdminSessionToken,
   DEFAULT_SESSION_TTL_SECONDS,
   getConfiguredAdminPassword,
+  isSessionSecretConfigured,
+  shouldUseSecureCookie,
   verifyAdminPassword,
 } from '@/lib/auth';
 
@@ -12,6 +14,13 @@ export async function POST(request: Request) {
     if (!getConfiguredAdminPassword()) {
       return NextResponse.json(
         { error: 'Chưa cấu hình biến môi trường ADMIN_PASSWORD trên máy chủ.' },
+        { status: 500 }
+      );
+    }
+
+    if (process.env.NODE_ENV === 'production' && !isSessionSecretConfigured()) {
+      return NextResponse.json(
+        { error: 'Chưa cấu hình biến môi trường ADMIN_SESSION_SECRET trên máy chủ.' },
         { status: 500 }
       );
     }
@@ -29,7 +38,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: 'lax',
       path: '/',
-      secure: process.env.NODE_ENV === 'production',
+      secure: shouldUseSecureCookie(request),
       maxAge: DEFAULT_SESSION_TTL_SECONDS,
     });
     return response;

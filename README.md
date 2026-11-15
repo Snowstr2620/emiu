@@ -36,7 +36,8 @@ Hệ thống tự động chuyển sang chế độ **Supabase Cloud** khi phát
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `ADMIN_PASSWORD` (mật khẩu quản trị riêng của bạn)
-   - `SESSION_SECRET` (chuỗi ngẫu nhiên tối thiểu 32 ký tự để ký session cookie)
+   - `ADMIN_SESSION_SECRET` (chuỗi ngẫu nhiên tối thiểu 32 ký tự để ký session cookie — bắt buộc trong môi trường production)
+   - `SUPABASE_STORAGE_BUCKET` (tuỳ chọn, mặc định là `love-memories`)
 3. **Deploy lên Vercel:** Push mã nguồn lên GitHub và import vào Vercel (framework Next.js mặc định). Sau khi deploy xong, mở `/admin` để thêm ảnh kỷ niệm và tâm thư trực tuyến.
 
 ## 4. Lệnh kiểm tra kỹ thuật

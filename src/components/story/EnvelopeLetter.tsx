@@ -17,7 +17,7 @@ export function EnvelopeLetter({
 }: EnvelopeLetterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const paragraphs = letterBody
-    .split(/\n{2,}/)
+    .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean);
 

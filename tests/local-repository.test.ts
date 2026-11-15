@@ -129,4 +129,43 @@ describe('LocalStorageRepository', () => {
     await repo.deleteStoredFileByUrl('/samples/memory-1.svg');
     expect(fs.existsSync(outsideFile)).toBe(true);
   });
+
+  test('falls back safely to in-memory seed data on Vercel read-only filesystem without crashing', async () => {
+    const origVercel = process.env.VERCEL;
+    try {
+      process.env.VERCEL = '1';
+      // Point to an uncreatable nested path to verify it does not write or crash
+      const readOnlyRepo = new LocalStorageRepository({
+        dataDir: path.join(tempRoot, 'vercel-ro-blocked', 'nested', 'data'),
+        uploadDir: path.join(tempRoot, 'vercel-ro-blocked', 'nested', 'uploads'),
+      });
+      const pub = await readOnlyRepo.getPublicData();
+      const admin = await readOnlyRepo.getAdminData();
+      expect(pub.memories).toHaveLength(4);
+      expect(admin.memories).toHaveLength(4);
+      expect(fs.existsSync(path.join(tempRoot, 'vercel-ro-blocked'))).toBe(false);
+    } finally {
+      if (origVercel === undefined) {
+        delete process.env.VERCEL;
+      } else {
+        process.env.VERCEL = origVercel;
+      }
+    }
+  });
+
+  test('rejects enabling viewer passcode when no PIN exists or is provided', async () => {
+    await expect(
+      repo.updateSettings({
+        coupleTitle: 'Hùng & Thảo',
+        heroSubtitle: 'Câu chuyện của hai đứa',
+        loveStartDate: '2024-10-12',
+        musicUrl: '/samples/gentle-memories.wav',
+        musicEnabled: true,
+        letterTitle: 'Gửi em',
+        letterBody: 'Cảm ơn em rất nhiều.',
+        letterSignature: 'Thương em',
+        viewerPasscodeEnabled: true,
+      })
+    ).rejects.toThrow();
+  });
 });

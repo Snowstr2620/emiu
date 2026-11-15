@@ -58,6 +58,7 @@ values (
     'audio/mpeg',
     'audio/mp3',
     'audio/mp4',
+    'audio/m4a',
     'audio/x-m4a',
     'audio/wav',
     'audio/x-wav'

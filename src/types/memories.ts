@@ -43,4 +43,5 @@ export interface StorageStatus {
   mode: 'supabase' | 'local';
   readOnlyServerlessWarning: boolean;
   usingDefaultAdminPassword: boolean;
+  usingDefaultSessionSecret: boolean;
 }

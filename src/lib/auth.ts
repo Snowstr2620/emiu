@@ -11,6 +11,28 @@ export function isUsingDefaultAdminPassword(): boolean {
   return !process.env.ADMIN_PASSWORD?.trim();
 }
 
+export function isSessionSecretConfigured(): boolean {
+  return Boolean(process.env.ADMIN_SESSION_SECRET?.trim());
+}
+
+export function shouldUseSecureCookie(request?: Request): boolean {
+  if (request) {
+    const forwardedProto = request.headers.get('x-forwarded-proto');
+    if (forwardedProto) {
+      const firstProto = forwardedProto.split(',')[0]?.trim().toLowerCase();
+      if (firstProto) {
+        return firstProto === 'https';
+      }
+    }
+    try {
+      return new URL(request.url).protocol === 'https:';
+    } catch {
+      // fall through to environment check
+    }
+  }
+  return process.env.NODE_ENV === 'production';
+}
+
 export function getConfiguredAdminPassword(): string {
   const configured = process.env.ADMIN_PASSWORD?.trim();
   if (configured) return configured;
@@ -23,6 +45,9 @@ export function getConfiguredAdminPassword(): string {
 function getSessionSecret(): string {
   const secret = process.env.ADMIN_SESSION_SECRET?.trim();
   if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('ADMIN_SESSION_SECRET must be configured in production.');
+  }
   return `${DEV_FALLBACK_SECRET}:${getConfiguredAdminPassword() || 'unconfigured'}`;
 }
 
@@ -63,8 +88,15 @@ function verifyToken(token: string | null | undefined, expectedPrefix: 'admin' |
   }
 
   const payload = `${prefix}.${expStr}`;
+  let secret: string;
+  try {
+    secret = getSessionSecret();
+  } catch {
+    return false;
+  }
+
   const expectedSig = crypto
-    .createHmac('sha256', getSessionSecret())
+    .createHmac('sha256', secret)
     .update(payload)
     .digest('base64url');
 

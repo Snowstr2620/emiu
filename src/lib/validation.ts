@@ -22,6 +22,17 @@ export const ALLOWED_AUDIO_MIMES = new Set([
   'audio/x-wav',
 ]);
 
+export const ALLOWED_IMAGE_EXTENSIONS = new Set([
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.gif',
+  '.avif',
+]);
+
+export const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav']);
+
 const FORBIDDEN_EXTENSIONS = new Set(['.svg', '.html', '.htm', '.js', '.mjs', '.php', '.exe']);
 
 export type UploadKind = 'image' | 'audio';
@@ -45,7 +56,7 @@ export function validateUploadRequest(input: {
   }
 
   if (kind === 'image') {
-    if (!ALLOWED_IMAGE_MIMES.has(normalizedMime)) {
+    if (!ALLOWED_IMAGE_MIMES.has(normalizedMime) || !ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
       return {
         valid: false,
         error: 'Chỉ hỗ trợ ảnh định dạng JPG, PNG, WebP, GIF hoặc AVIF.',
@@ -61,7 +72,7 @@ export function validateUploadRequest(input: {
   }
 
   if (kind === 'audio') {
-    if (!ALLOWED_AUDIO_MIMES.has(normalizedMime)) {
+    if (!ALLOWED_AUDIO_MIMES.has(normalizedMime) || !ALLOWED_AUDIO_EXTENSIONS.has(ext)) {
       return {
         valid: false,
         error: 'Chỉ hỗ trợ nhạc nền định dạng MP3, M4A hoặc WAV.',

@@ -105,7 +105,9 @@ describe('API route handlers', () => {
     expect(body.settings.coupleTitle).toBeTruthy();
     expect('viewerPasscodeHash' in body.settings).toBe(false);
 
-    const outRes = await logoutPost();
+    const outRes = await logoutPost(
+      new Request('http://localhost/api/admin/logout', { method: 'POST' })
+    );
     expect(outRes.status).toBe(200);
     expect(outRes.cookies.get('ny_admin_session')?.value).toBe('');
   });
