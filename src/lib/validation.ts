@@ -248,7 +248,7 @@ export function validateUserLoginPayload(
   raw: unknown,
   options?: { defaultUsername?: string }
 ): { data: ValidatedUserLoginPayload } | { error: string } {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'Dữ liệu đăng nhập không hợp lệ.' };
   }
 
@@ -280,7 +280,7 @@ export interface ValidatedOtpVerifyPayload {
 export function validateOtpVerifyPayload(
   raw: unknown
 ): { data: ValidatedOtpVerifyPayload } | { error: string } {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'Dữ liệu xác thực OTP không hợp lệ.' };
   }
   const r = raw as Record<string, unknown>;
@@ -306,7 +306,7 @@ export interface ValidatedCreateUserPayload {
 export function validateCreateUserPayload(
   raw: unknown
 ): { data: ValidatedCreateUserPayload } | { error: string } {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'Dữ liệu tài khoản không hợp lệ.' };
   }
   const r = raw as Record<string, unknown>;
@@ -363,7 +363,7 @@ export interface ValidatedUpdateUserPayload {
 export function validateUpdateUserPayload(
   raw: unknown
 ): { data: ValidatedUpdateUserPayload } | { error: string } {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'Dữ liệu cập nhật tài khoản không hợp lệ.' };
   }
   const r = raw as Record<string, unknown>;
@@ -465,7 +465,7 @@ const FORBIDDEN_METADATA_KEYS = new Set(['__proto__', 'constructor', 'prototype'
 export function validateClientActivityPayload(
   raw: unknown
 ): { data: ValidatedClientActivityPayload } | { error: string } {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'Dữ liệu nhật ký hoạt động không hợp lệ.' };
   }
   const r = raw as Record<string, unknown>;

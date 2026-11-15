@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
-  clearViewerCookiesOnResponse,
+  clearCookieOnResponse,
   GUEST_COOLDOWN_COOKIE_NAME,
   GUEST_COOLDOWN_TTL_SECONDS,
   type GuestCooldownTokenPayload,
@@ -14,6 +14,7 @@ import {
   VIEWER_UNLOCKED_COOKIE_NAME,
 } from '@/lib/auth';
 import { getStorageRepository } from '@/lib/storage';
+import type { StorageRepository } from '@/lib/storage/types';
 import { type ClientActivityEventType, validateClientActivityPayload } from '@/lib/validation';
 
 const DEFAULT_ACTIVITY_DETAILS: Record<ClientActivityEventType, string> = {
@@ -24,6 +25,27 @@ const DEFAULT_ACTIVITY_DETAILS: Record<ClientActivityEventType, string> = {
   memory_viewed: 'Xem ảnh kỷ niệm',
   letter_opened: 'Chạm mở phong thư tâm sự',
 };
+
+async function clearInvalidViewerCookies(
+  response: NextResponse,
+  request: Request,
+  repo: StorageRepository,
+  hasUnlockedCookie: boolean
+): Promise<void> {
+  if (hasUnlockedCookie) {
+    clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
+  }
+  const step1Token = parseCookieFromHeader(
+    request.headers.get('cookie'),
+    VIEWER_STEP1_COOKIE_NAME
+  );
+  if (step1Token) {
+    const validStep1User = await verifyViewerTokenWithRepo(step1Token, 'viewer_step1', repo);
+    if (!validStep1User) {
+      clearCookieOnResponse(response, VIEWER_STEP1_COOKIE_NAME, request);
+    }
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -44,10 +66,9 @@ export async function POST(request: Request) {
 
     const { eventType, detail, metadata } = validated.data;
     const repo = getStorageRepository();
-    const unlockedToken = parseCookieFromHeader(
-      request.headers.get('cookie'),
-      VIEWER_UNLOCKED_COOKIE_NAME
-    );
+    const cookieHeader = request.headers.get('cookie');
+    const unlockedToken = parseCookieFromHeader(cookieHeader, VIEWER_UNLOCKED_COOKIE_NAME);
+    const hasUnlockedCookie = Boolean(unlockedToken);
     const unlockedUser = await verifyViewerTokenWithRepo(unlockedToken, 'viewer_unlocked', repo);
     const deviceSummary = summarizeUserAgent(request.headers.get('user-agent'));
 
@@ -70,21 +91,12 @@ export async function POST(request: Request) {
         { error: 'Vui lòng mở khoá trang trước khi ghi nhận thao tác này.' },
         { status: 401 }
       );
-      const cookieHeader = request.headers.get('cookie');
-      if (
-        parseCookieFromHeader(cookieHeader, VIEWER_UNLOCKED_COOKIE_NAME) ||
-        parseCookieFromHeader(cookieHeader, VIEWER_STEP1_COOKIE_NAME)
-      ) {
-        clearViewerCookiesOnResponse(response, request);
-      }
+      await clearInvalidViewerCookies(response, request, repo, hasUnlockedCookie);
       return response;
     }
 
     if (eventType === 'page_visit' || eventType === 'page_leave') {
-      const cooldownRaw = parseCookieFromHeader(
-        request.headers.get('cookie'),
-        GUEST_COOLDOWN_COOKIE_NAME
-      );
+      const cooldownRaw = parseCookieFromHeader(cookieHeader, GUEST_COOLDOWN_COOKIE_NAME);
       const cooldown = verifySessionPayload<GuestCooldownTokenPayload>(
         cooldownRaw,
         'guest_cooldown'
@@ -92,18 +104,12 @@ export async function POST(request: Request) {
 
       if (eventType === 'page_visit') {
         if (cooldown?.visitLogged) {
-          return NextResponse.json({ ok: true, deduped: true });
+          const response = NextResponse.json({ ok: true, deduped: true });
+          if (hasUnlockedCookie) {
+            clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
+          }
+          return response;
         }
-
-        await repo.recordActivity({
-          userId: null,
-          username: 'khach',
-          userRole: 'guest',
-          eventType: 'page_visit',
-          detail: detail || 'Khách ghé thăm trang kỷ niệm',
-          deviceSummary,
-          metadata,
-        });
 
         const token = signSessionPayload<GuestCooldownTokenPayload>(
           {
@@ -115,6 +121,16 @@ export async function POST(request: Request) {
           GUEST_COOLDOWN_TTL_SECONDS
         );
 
+        await repo.recordActivity({
+          userId: null,
+          username: 'khach',
+          userRole: 'guest',
+          eventType: 'page_visit',
+          detail: detail || 'Khách ghé thăm trang kỷ niệm',
+          deviceSummary,
+          metadata,
+        });
+
         const response = NextResponse.json({ ok: true });
         setCookieOnResponse(
           response,
@@ -123,12 +139,27 @@ export async function POST(request: Request) {
           GUEST_COOLDOWN_TTL_SECONDS,
           request
         );
+        if (hasUnlockedCookie) {
+          clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
+        }
         return response;
       }
 
       if (!cooldown || !cooldown.visitLogged || cooldown.leaveLogged) {
-        return NextResponse.json({ ok: true, deduped: true });
+        const response = NextResponse.json({ ok: true, deduped: true });
+        if (hasUnlockedCookie) {
+          clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
+        }
+        return response;
       }
+
+      const remainingTtl = Math.max(1, cooldown.exp - Math.floor(Date.now() / 1000));
+      const updatedToken = signSessionPayload<GuestCooldownTokenPayload>({
+        typ: 'guest_cooldown',
+        visitLogged: true,
+        leaveLogged: true,
+        exp: cooldown.exp,
+      });
 
       await repo.recordActivity({
         userId: null,
@@ -140,14 +171,6 @@ export async function POST(request: Request) {
         metadata,
       });
 
-      const remainingTtl = Math.max(1, cooldown.exp - Math.floor(Date.now() / 1000));
-      const updatedToken = signSessionPayload<GuestCooldownTokenPayload>({
-        typ: 'guest_cooldown',
-        visitLogged: true,
-        leaveLogged: true,
-        exp: cooldown.exp,
-      });
-
       const response = NextResponse.json({ ok: true });
       setCookieOnResponse(
         response,
@@ -156,6 +179,9 @@ export async function POST(request: Request) {
         remainingTtl,
         request
       );
+      if (hasUnlockedCookie) {
+        clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
+      }
       return response;
     }
 
@@ -168,7 +194,11 @@ export async function POST(request: Request) {
       deviceSummary,
       metadata,
     });
-    return NextResponse.json({ ok: true });
+    const response = NextResponse.json({ ok: true });
+    if (hasUnlockedCookie) {
+      clearCookieOnResponse(response, VIEWER_UNLOCKED_COOKIE_NAME, request);
+    }
+    return response;
   } catch {
     return NextResponse.json({ error: 'Không thể ghi nhận hoạt động lúc này.' }, { status: 500 });
   }

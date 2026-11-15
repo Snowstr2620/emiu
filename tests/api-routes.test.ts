@@ -27,6 +27,9 @@ import { POST as viewerVerifyOtpPost } from '@/app/api/viewer/verify-otp/route';
 import {
   ADMIN_COOKIE_NAME,
   GUEST_COOLDOWN_COOKIE_NAME,
+  GUEST_COOLDOWN_TTL_SECONDS,
+  type GuestCooldownTokenPayload,
+  signSessionPayload,
   VIEWER_STEP1_COOKIE_NAME,
   VIEWER_UNLOCKED_COOKIE_NAME,
 } from '@/lib/auth';
@@ -394,6 +397,27 @@ describe('API route handlers', () => {
   });
 
   test('/api/activity enforces guest cooldown, protects interactive events when locked, rejects forged auth events, and attributes unlocked users', async () => {
+    // Malformed raw JSON and array payloads return 400 cleanly on /api/activity & /api/viewer/login
+    for (const badBody of ['{invalid', '[]']) {
+      const badActivity = await activityPost(
+        new Request('http://localhost/api/activity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: badBody,
+        })
+      );
+      expect(badActivity.status).toBe(400);
+
+      const badViewerLogin = await viewerLoginPost(
+        new Request('http://localhost/api/viewer/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: badBody,
+        })
+      );
+      expect(badViewerLogin.status).toBe(400);
+    }
+
     // Reject forged auth event types
     for (const forged of ['login_step1_ok', 'otp_verified', 'login_failed', 'otp_failed', 'logout']) {
       const forgedRes = await activityPost(
@@ -437,6 +461,24 @@ describe('API route handlers', () => {
       })
     );
     expect(step1OnlyEvent.status).toBe(401);
+    // Valid ny_viewer_step1 must be preserved when returning 401
+    expect(step1OnlyEvent.cookies.get(VIEWER_STEP1_COOKIE_NAME)).toBeUndefined();
+
+    // 401 preserves valid ny_viewer_step1 while clearing stale/invalid ny_viewer_unlocked
+    const validStep1PlusStaleUnlocked = await activityPost(
+      new Request('http://localhost/api/activity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie: `${VIEWER_STEP1_COOKIE_NAME}=${step1Cookie}; ${VIEWER_UNLOCKED_COOKIE_NAME}=stale.unlocked.token`,
+        },
+        body: JSON.stringify({ eventType: 'letter_opened' }),
+      })
+    );
+    expect(validStep1PlusStaleUnlocked.status).toBe(401);
+    expect(validStep1PlusStaleUnlocked.cookies.get(VIEWER_STEP1_COOKIE_NAME)).toBeUndefined();
+    expect(validStep1PlusStaleUnlocked.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.value).toBe('');
+    expect(validStep1PlusStaleUnlocked.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.maxAge).toBe(0);
 
     // Guest page_leave WITHOUT prior page_visit cookie -> deduped (0 leave logs written)
     const earlyLeave = await activityPost(
@@ -509,6 +551,58 @@ describe('API route handlers', () => {
     expect(secondLeave.status).toBe(200);
     expect(await secondLeave.json()).toEqual({ ok: true, deduped: true });
 
+    // page_leave preserves remaining maxAge <= GUEST_COOLDOWN_TTL_SECONDS instead of resetting to 600s
+    const shortRemainingCooldown = signSessionPayload<GuestCooldownTokenPayload>(
+      {
+        typ: 'guest_cooldown',
+        visitLogged: true,
+        leaveLogged: false,
+        exp: 0,
+      },
+      120
+    );
+    const shortLeave = await activityPost(
+      new Request('http://localhost/api/activity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie: `${GUEST_COOLDOWN_COOKIE_NAME}=${shortRemainingCooldown}`,
+        },
+        body: JSON.stringify({ eventType: 'page_leave' }),
+      })
+    );
+    expect(shortLeave.status).toBe(200);
+    const shortLeaveCookie = shortLeave.cookies.get(GUEST_COOLDOWN_COOKIE_NAME);
+    expect(shortLeaveCookie?.maxAge).toBeGreaterThan(0);
+    expect(shortLeaveCookie?.maxAge).toBeLessThanOrEqual(120);
+    expect(shortLeaveCookie?.maxAge).toBeLessThan(GUEST_COOLDOWN_TTL_SECONDS);
+
+    // Expired ny_guest_cooldown cookie allows a new page_visit; stale ny_viewer_unlocked on page_visit is cleared
+    const expiredCooldown = signSessionPayload<GuestCooldownTokenPayload>(
+      {
+        typ: 'guest_cooldown',
+        visitLogged: true,
+        leaveLogged: true,
+        exp: 0,
+      },
+      -10
+    );
+    const afterExpiryVisit = await activityPost(
+      new Request('http://localhost/api/activity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie: `${GUEST_COOLDOWN_COOKIE_NAME}=${expiredCooldown}; ${VIEWER_UNLOCKED_COOKIE_NAME}=stale.unlocked.token`,
+        },
+        body: JSON.stringify({ eventType: 'page_visit' }),
+      })
+    );
+    expect(afterExpiryVisit.status).toBe(200);
+    expect(await afterExpiryVisit.json()).toEqual({ ok: true });
+    expect(afterExpiryVisit.cookies.get(GUEST_COOLDOWN_COOKIE_NAME)?.value).toBeTruthy();
+    expect(afterExpiryVisit.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.value).toBe('');
+    expect(afterExpiryVisit.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.maxAge).toBe(0);
+
     // Complete OTP to get unlocked session and log interactive events attributed to user
     const otpRes = await viewerVerifyOtpPost(
       new Request('http://localhost/api/viewer/verify-otp', {
@@ -548,17 +642,16 @@ describe('API route handlers', () => {
       })
     );
     const visitLogsJson = await visitLogsRes.json();
-    expect(visitLogsJson.logs).toHaveLength(1);
+    expect(visitLogsJson.logs).toHaveLength(2);
     expect(visitLogsJson.logs[0].username).toBe('khach');
     expect(visitLogsJson.logs[0].userRole).toBe('guest');
-    expect(visitLogsJson.logs[0].deviceSummary).toBe('Safari · iPhone');
 
     const leaveLogsRes = await adminActivityGet(
       new Request('http://localhost/api/admin/activity?eventType=page_leave', {
         headers: { cookie: cookieHeader },
       })
     );
-    expect((await leaveLogsRes.json()).logs).toHaveLength(1);
+    expect((await leaveLogsRes.json()).logs).toHaveLength(2);
 
     const memLogsRes = await adminActivityGet(
       new Request(
@@ -571,7 +664,7 @@ describe('API route handlers', () => {
     expect(memLogsJson.logs[0].username).toBe('nguoithuong');
     expect(memLogsJson.logs[0].deviceSummary).toBe('Chrome · macOS');
     expect(memLogsJson.trafficSummary).toMatchObject({
-      visitsToday: 1,
+      visitsToday: 2,
       otpVerifiedToday: 1,
       activeUsersCount: 2,
     });
@@ -915,8 +1008,7 @@ describe('API route handlers', () => {
     expect(revokedActivityRes.status).toBe(401);
     expect(revokedActivityRes.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.value).toBe('');
     expect(revokedActivityRes.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)?.maxAge).toBe(0);
-    expect(revokedActivityRes.cookies.get(VIEWER_STEP1_COOKIE_NAME)?.value).toBe('');
-    expect(revokedActivityRes.cookies.get(VIEWER_STEP1_COOKIE_NAME)?.maxAge).toBe(0);
+    expect(revokedActivityRes.cookies.get(VIEWER_STEP1_COOKIE_NAME)).toBeUndefined();
     expect(revokedActivityRes.headers.getSetCookie().join(';')).toContain('Max-Age=0');
 
     // Admin updating own password refreshes ny_admin_session so active admin isn't locked out

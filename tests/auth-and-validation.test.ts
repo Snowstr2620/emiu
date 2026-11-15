@@ -880,4 +880,12 @@ describe('multi-account & activity payload validation', () => {
     });
     expect('data' in res).toBe(true);
   });
+
+  test('rejects JSON array payloads across user, OTP, and activity validators', () => {
+    expect('error' in validateUserLoginPayload([])).toBe(true);
+    expect('error' in validateOtpVerifyPayload([])).toBe(true);
+    expect('error' in validateCreateUserPayload([])).toBe(true);
+    expect('error' in validateUpdateUserPayload([])).toBe(true);
+    expect('error' in validateClientActivityPayload([])).toBe(true);
+  });
 });
