@@ -101,7 +101,7 @@ export function PhotoLightbox({
           <img
             src={memory.imageUrl}
             alt={memory.imageAlt || memory.title || 'Ảnh kỷ niệm'}
-            className="max-h-full max-h-[calc(48vh-1rem)] w-auto max-w-full rounded-xl object-contain sm:max-h-[calc(56vh-1rem)]"
+            className="max-h-[calc(48vh-1rem)] w-auto max-w-full rounded-xl object-contain sm:max-h-[calc(56vh-1rem)]"
           />
 
           {hasMultiple && (

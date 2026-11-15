@@ -193,7 +193,8 @@ describe('StoryExperience UI components', () => {
     expect(within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.')).toBeInTheDocument();
 
     const img = within(dialog).getByRole('img', { name: /Quán trà chiều mưa/i });
-    expect(img).toHaveClass('max-h-full', 'max-h-[calc(48vh-1rem)]', 'sm:max-h-[calc(56vh-1rem)]');
+    expect(img).toHaveClass('max-h-[calc(48vh-1rem)]', 'sm:max-h-[calc(56vh-1rem)]');
+    expect(img).not.toHaveClass('max-h-full');
     expect(dialog).toHaveClass('bg-[#050203]/90');
     expect(img.parentElement).toHaveClass('shrink-0', 'min-h-[160px]', 'max-h-[48vh]');
     const captionContainer = within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.').parentElement;
@@ -476,14 +477,20 @@ describe('StoryExperience UI components', () => {
     expect(screen.getByRole('button', { name: /Dạo bước vào miền ký ức/i })).toHaveClass('to-pink-600');
     expect(bentoBtn).toHaveClass('to-pink-600');
 
-    // Single-memory Bento spans full 12 columns centered
+    // Single-memory Bento spans full 12 columns centered; disabled music omits empty ml-auto dock wrapper
     rerender(
       <StoryExperience
-        data={{ settings: SAMPLE_DATA.settings, memories: [SAMPLE_DATA.memories[0]] }}
-        currentUser={VIEWER_USER}
+        data={{
+          settings: { ...SAMPLE_DATA.settings, musicEnabled: false },
+          memories: [SAMPLE_DATA.memories[0]],
+        }}
+        currentUser={null}
       />
     );
     expect(screen.getByText('#01').closest('article')).toHaveClass('lg:col-span-12');
+    const heartBtn = screen.getByRole('button', { name: /Ngắm lại trái tim pixel/i });
+    const dockContainer = heartBtn.parentElement?.parentElement;
+    expect(dockContainer?.querySelector('.ml-auto')).toBeNull();
   });
 });
 

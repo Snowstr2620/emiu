@@ -258,18 +258,24 @@ export function StoryExperience({
             </div>
           )}
 
-          <div className="pointer-events-auto order-2 ml-auto shrink-0 sm:order-last">
-            <AudioToggle
-              inline
-              musicUrl={settings.musicUrl}
-              musicEnabled={settings.musicEnabled}
-              isPlaying={isPlaying}
-              onToggle={handleToggleMusic}
-              onSyncPlayState={setIsPlaying}
-            />
-          </div>
+          {settings.musicEnabled && settings.musicUrl && (
+            <div className="pointer-events-auto order-2 ml-auto shrink-0 sm:order-last">
+              <AudioToggle
+                inline
+                musicUrl={settings.musicUrl}
+                musicEnabled={settings.musicEnabled}
+                isPlaying={isPlaying}
+                onToggle={handleToggleMusic}
+                onSyncPlayState={setIsPlaying}
+              />
+            </div>
+          )}
 
-          <div className="pointer-events-auto order-3 flex flex-wrap items-center gap-1.5 sm:order-2 sm:gap-2">
+          <div
+            className={`pointer-events-auto flex flex-wrap items-center gap-1.5 sm:order-2 sm:gap-2 ${
+              currentUser ? 'order-3' : 'order-1'
+            }`}
+          >
             {currentUser?.role === 'admin' && (
               <Link
                 href="/admin"
