@@ -7,14 +7,31 @@ export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const repository = getStorageRepository();
-  const data = await repository.getPublicData();
+  const [data, session] = await Promise.all([
+    repository.getPublicData(),
+    resolveViewerSession(repository),
+  ]);
 
-  if (data.settings.viewerPasscodeEnabled) {
-    const viewerSession = await resolveViewerSession(repository);
-    if (viewerSession.stage !== 'unlocked') {
-      return <ViewerPasscodeGate coupleTitle={data.settings.coupleTitle} />;
-    }
+  const showDevDefaultHints = process.env.NODE_ENV !== 'production';
+
+  if (data.settings.viewerPasscodeEnabled && session.stage !== 'unlocked') {
+    return (
+      <ViewerPasscodeGate
+        coupleTitle={data.settings.coupleTitle}
+        initialStage={session.stage}
+        initialOtpHint={session.otpHint}
+        initialUsername={session.user?.username}
+        initialDisplayName={session.user?.displayName}
+        showDevDefaultHints={showDevDefaultHints}
+      />
+    );
   }
 
-  return <StoryExperience data={data} />;
+  return (
+    <StoryExperience
+      data={data}
+      currentUser={session.user}
+      viewerPasscodeEnabled={data.settings.viewerPasscodeEnabled}
+    />
+  );
 }

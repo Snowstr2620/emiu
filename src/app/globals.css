@@ -36,3 +36,108 @@
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
 }
+
+@keyframes love-petal-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: var(--petal-opacity, 0.55);
+  }
+  85% {
+    opacity: var(--petal-opacity, 0.55);
+  }
+  100% {
+    transform: translate3d(var(--petal-drift, 32px), 108vh, 0) rotate(var(--petal-rotate, 220deg));
+    opacity: 0;
+  }
+}
+
+@keyframes love-heart-rise {
+  0% {
+    transform: translate3d(0, 105vh, 0) scale(0.82);
+    opacity: 0;
+  }
+  15% {
+    opacity: var(--petal-opacity, 0.5);
+  }
+  82% {
+    opacity: var(--petal-opacity, 0.45);
+  }
+  100% {
+    transform: translate3d(var(--petal-drift, -24px), -12vh, 0) scale(1.06);
+    opacity: 0;
+  }
+}
+
+@keyframes love-burst-pop {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.4) rotate(0deg);
+    opacity: 0.95;
+  }
+  55% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(var(--bx, 0px), var(--by, -36px), 0) scale(1.12) rotate(var(--brot, 16deg));
+    opacity: 0;
+  }
+}
+
+@keyframes love-pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.22), 0 12px 32px rgba(244, 114, 182, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(244, 114, 182, 0), 0 16px 38px rgba(244, 114, 182, 0.24);
+  }
+}
+
+@keyframes love-shimmer-text {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.love-float-petal {
+  will-change: transform, opacity;
+  animation: love-petal-fall var(--petal-duration, 16s) linear var(--petal-delay, 0s) infinite;
+}
+
+.love-float-heart {
+  will-change: transform, opacity;
+  animation: love-heart-rise var(--petal-duration, 18s) linear var(--petal-delay, 0s) infinite;
+}
+
+.love-burst-heart {
+  will-change: transform, opacity;
+  animation: love-burst-pop 720ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.love-pulse-glow {
+  animation: love-pulse-glow 3s ease-in-out infinite;
+}
+
+.love-shimmer {
+  background-size: 200% 200%;
+  animation: love-shimmer-text 6s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .love-float-petal,
+  .love-float-heart,
+  .love-burst-heart,
+  .love-pulse-glow,
+  .love-shimmer {
+    animation: none !important;
+    transition: none !important;
+  }
+}

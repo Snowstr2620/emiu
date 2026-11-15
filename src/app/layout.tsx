@@ -8,8 +8,9 @@ import '@fontsource/cormorant-garamond/600-italic.css';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Hành Trình Kỷ Niệm Của Tụi Mình',
-  description: 'Những bức ảnh kỷ niệm cũ và lời tâm sự dịu dàng dành cho người thương.',
+  title: 'Miền Ký Ức Yêu Thương · Chỉ Riêng Hai Đứa',
+  description:
+    'Nơi cất giữ từng nhịp tim rung động, những bức ảnh ngập tràn thương nhớ và bức tâm thư dịu dàng gửi em bé yêu.',
 };
 
 export default function RootLayout({

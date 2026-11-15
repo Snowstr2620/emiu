@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, X } from 'lucide-react';
 import { formatMemoryLongDateVi } from '@/lib/date-utils';
 import { MemoryItem } from '@/types/memories';
 
@@ -98,17 +98,18 @@ export function PhotoLightbox({
 
         <div className="mt-4 overflow-y-auto px-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
+              <Heart className="h-3 w-3 fill-pink-500 text-pink-500" />
               {formatMemoryLongDateVi(memory.memoryDate)}
             </span>
             {hasMultiple && (
-              <span className="text-xs font-medium text-slate-400">
-                {selectedIndex + 1} / {memories.length}
+              <span className="text-xs font-medium text-slate-500">
+                Khoảnh khắc {selectedIndex + 1} / {memories.length}
               </span>
             )}
           </div>
           {memory.title && (
-            <h3 className="mt-2.5 text-lg font-bold text-slate-900 sm:text-xl">
+            <h3 className="mt-2.5 font-serif text-xl font-bold text-slate-900 sm:text-2xl">
               {memory.title}
             </h3>
           )}

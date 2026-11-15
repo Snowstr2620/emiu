@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CalendarHeart, Maximize2 } from 'lucide-react';
+import { CalendarHeart, Heart, Maximize2 } from 'lucide-react';
 import { formatMemoryDateVi } from '@/lib/date-utils';
 import { MemoryItem } from '@/types/memories';
 
@@ -15,24 +15,32 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
   return (
     <section id="timeline" className="mx-auto max-w-4xl px-4 py-12 sm:px-8 sm:py-16">
       <div className="mb-12 text-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-indigo-500 shadow-sm">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-pink-600 shadow-sm">
           <CalendarHeart className="h-3.5 w-3.5 text-pink-500" />
-          Dòng thời gian kỷ niệm
+          Dòng thời gian ngập tràn thương nhớ
         </span>
-        <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Những khung hình tụi mình từng đi qua
+        <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          Những khung hình anh nâng niu cất giữ
         </h2>
         <p className="mt-2 text-sm text-slate-500 sm:text-base">
-          Chạm vào từng bức ảnh để xem rõ hơn nhé
+          Chạm nhẹ vào từng tấm ảnh để sống lại khoảnh khắc tim mình rung lên vì nhau nhé
         </p>
+        <div
+          aria-hidden="true"
+          className="mx-auto mt-4 flex items-center justify-center gap-2 text-pink-300"
+        >
+          <span className="h-px w-10 bg-gradient-to-r from-transparent to-pink-200" />
+          <Heart className="h-3.5 w-3.5 fill-pink-300" />
+          <span className="h-px w-10 bg-gradient-to-l from-transparent to-pink-200" />
+        </div>
       </div>
 
       {memories.length === 0 ? (
         <div className="glass-card mx-auto max-w-lg rounded-3xl p-8 text-center">
           <p className="text-sm leading-relaxed text-slate-600 sm:text-base">
-            Chưa có kỷ niệm nào được thêm vào dòng thời gian. Bạn có thể đăng nhập{' '}
-            <span className="font-semibold text-pink-600">/admin</span> để tải lên bức ảnh đầu
-            tiên của hai bạn nhé.
+            Chưa có kỷ niệm nào được thêm vào dòng thời gian. Anh có thể đăng nhập{' '}
+            <span className="font-semibold text-pink-600">/admin</span> để cất lên bức ảnh ngọt
+            ngào đầu tiên của hai đứa mình nhé.
           </p>
         </div>
       ) : (
@@ -40,7 +48,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
           {/* Timeline rail */}
           <div
             aria-hidden="true"
-            className="absolute bottom-4 left-4 top-4 w-0.5 bg-gradient-to-b from-pink-200 via-indigo-200 to-sky-200 md:left-1/2 md:-translate-x-1/2"
+            className="absolute bottom-4 left-4 top-4 w-0.5 bg-gradient-to-b from-pink-200 via-rose-200 to-indigo-200 md:left-1/2 md:-translate-x-1/2"
           />
 
           <div className="space-y-10 sm:space-y-14">
@@ -64,10 +72,10 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                   {/* Timeline node */}
                   <span
                     aria-hidden="true"
-                    className={`absolute top-7 h-3.5 w-3.5 rounded-full border-2 border-white bg-gradient-to-tr from-pink-500 to-indigo-400 shadow-md ${
+                    className={`absolute top-7 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-gradient-to-tr from-rose-400 to-pink-500 shadow-md ${
                       isLeftDesktop
-                        ? 'left-[10px] md:left-auto md:right-[-7px]'
-                        : 'left-[10px] md:-left-[7px]'
+                        ? 'left-[9px] md:left-auto md:right-[-8px]'
+                        : 'left-[9px] md:-left-[8px]'
                     }`}
                   />
 
@@ -88,16 +96,19 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                       />
                       <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm backdrop-blur-sm">
                         <Maximize2 className="h-3 w-3 text-pink-500" />
-                        Phóng to
+                        Ngắm kỹ hơn
                       </span>
                     </button>
 
                     <div className="mt-4 px-1">
-                      <span className="inline-flex rounded-full bg-pink-50 px-3 py-0.5 text-xs font-semibold text-pink-600">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-0.5 text-xs font-semibold text-pink-600">
+                        <Heart className="h-2.5 w-2.5 fill-pink-500 text-pink-500" />
                         {formatMemoryDateVi(memory.memoryDate)}
                       </span>
                       {memory.title && (
-                        <h3 className="mt-2 text-lg font-bold text-slate-900">{memory.title}</h3>
+                        <h3 className="mt-2 font-serif text-xl font-bold text-slate-900">
+                          {memory.title}
+                        </h3>
                       )}
                       <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-600 sm:text-[15px]">
                         {memory.story}

@@ -9,6 +9,7 @@ interface AudioToggleProps {
   isPlaying: boolean;
   onToggle: () => void;
   onSyncPlayState: (playing: boolean) => void;
+  inline?: boolean;
 }
 
 export function AudioToggle({
@@ -17,6 +18,7 @@ export function AudioToggle({
   isPlaying,
   onToggle,
   onSyncPlayState,
+  inline = false,
 }: AudioToggleProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -41,23 +43,27 @@ export function AudioToggle({
     return null;
   }
 
+  const wrapperClassName = inline
+    ? 'relative shrink-0'
+    : 'fixed right-4 top-4 z-40 sm:right-6 sm:top-6';
+
   return (
-    <div className="fixed right-4 top-4 z-40 sm:right-6 sm:top-6">
+    <div className={wrapperClassName}>
       <audio ref={audioRef} src={musicUrl} loop preload="none" />
       <button
         type="button"
         onClick={onToggle}
         aria-label={isPlaying ? 'Tạm dừng nhạc nền' : 'Bật nhạc nền'}
-        className="glass-pill inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:border-pink-200 hover:text-pink-600"
+        className="glass-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-pink-200 hover:text-pink-600 sm:gap-2 sm:px-3.5 sm:py-2 sm:text-xs"
       >
         {isPlaying ? (
           <>
-            <Volume2 className="h-4 w-4 text-pink-500 animate-pulse" />
+            <Volume2 className="h-3 w-3 text-pink-500 animate-pulse sm:h-4 sm:w-4" />
             <span>Đang phát nhạc</span>
           </>
         ) : (
           <>
-            <VolumeX className="h-4 w-4 text-slate-400" />
+            <VolumeX className="h-3 w-3 text-slate-400 sm:h-4 sm:w-4" />
             <span>Bật nhạc nền</span>
           </>
         )}
