@@ -72,6 +72,7 @@ describe('LocalStorageRepository', () => {
       heroSubtitle: 'Chặng đường hai đứa mình',
       loveStartDate: '2024-10-12',
       musicUrl: savedSong.publicUrl,
+      musicPlaylist: [savedSong.publicUrl],
       musicEnabled: true,
       letterTitle: 'Gửi em',
       letterBody: 'Cảm ơn em đã luôn ở bên anh.',
@@ -87,6 +88,7 @@ describe('LocalStorageRepository', () => {
       heroSubtitle: 'Chặng đường hai đứa mình',
       loveStartDate: '2024-10-12',
       musicUrl: '/samples/gentle-memories.wav',
+      musicPlaylist: ['/samples/gentle-memories.wav'],
       musicEnabled: true,
       letterTitle: 'Gửi em',
       letterBody: 'Cảm ơn em rất nhiều.',
@@ -97,6 +99,38 @@ describe('LocalStorageRepository', () => {
     expect(secondUpdate.coupleTitle).toBe('Hùng & Thảo 2026');
     expect(secondUpdate.viewerPasscodeEnabled).toBe(false);
     expect(fs.existsSync(uploadedSongDiskPath)).toBe(false);
+  });
+
+  test('saves a multi-track playlist and only deletes uploaded songs removed from it', async () => {
+    const songA = await repo.saveLocalUpload({ fileName: 'a.mp3', buffer: Buffer.from('a') });
+    const songB = await repo.saveLocalUpload({ fileName: 'b.mp3', buffer: Buffer.from('b') });
+    const diskA = path.join(uploadDir, path.basename(songA.publicUrl));
+    const diskB = path.join(uploadDir, path.basename(songB.publicUrl));
+    const base = {
+      coupleTitle: 'Anh & Em',
+      heroSubtitle: 'Mãi bên nhau',
+      loveStartDate: '2024-10-12',
+      musicEnabled: true,
+      letterTitle: 'Gửi em',
+      letterBody: 'Thương em.',
+      letterSignature: 'Anh',
+      viewerPasscodeEnabled: true,
+    };
+
+    const saved = await repo.updateSettings({
+      ...base,
+      musicUrl: songA.publicUrl,
+      musicPlaylist: [songA.publicUrl, songB.publicUrl],
+    });
+    expect(saved.musicPlaylist).toEqual([songA.publicUrl, songB.publicUrl]);
+    expect((await repo.getPublicData()).settings.musicPlaylist).toEqual([
+      songA.publicUrl,
+      songB.publicUrl,
+    ]);
+
+    await repo.updateSettings({ ...base, musicUrl: songB.publicUrl, musicPlaylist: [songB.publicUrl] });
+    expect(fs.existsSync(diskA)).toBe(false);
+    expect(fs.existsSync(diskB)).toBe(true);
   });
 
   test('creates, updates, reorders, and deletes memories while safely cleaning uploaded files', async () => {
@@ -185,6 +219,7 @@ describe('LocalStorageRepository', () => {
       heroSubtitle: 'Câu chuyện của hai đứa',
       loveStartDate: '2024-10-12',
       musicUrl: '/samples/gentle-memories.wav',
+      musicPlaylist: ['/samples/gentle-memories.wav'],
       musicEnabled: true,
       letterTitle: 'Gửi em',
       letterBody: 'Cảm ơn em rất nhiều.',
@@ -250,6 +285,7 @@ describe('LocalStorageRepository', () => {
             heroSubtitle: 'Giữ nguyên tiêu đề cũ',
             loveStartDate: '2023-05-01',
             musicUrl: '/samples/gentle-memories.wav',
+            musicPlaylist: ['/samples/gentle-memories.wav'],
             musicEnabled: true,
             letterTitle: 'Thư cũ',
             letterBody: 'Nội dung thư cũ vẫn nguyên vẹn.',
@@ -292,6 +328,7 @@ describe('LocalStorageRepository', () => {
       heroSubtitle: 'Giữ nguyên tiêu đề cũ',
       loveStartDate: '2023-05-01',
       musicUrl: '/samples/gentle-memories.wav',
+      musicPlaylist: ['/samples/gentle-memories.wav'],
       musicEnabled: true,
       letterTitle: 'Thư cũ',
       letterBody: 'Nội dung thư cũ vẫn nguyên vẹn.',

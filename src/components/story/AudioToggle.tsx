@@ -1,32 +1,60 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Volume2 } from 'lucide-react';
+import { DEFAULT_MUSIC_URL, normalizePlaylist } from '@/lib/music-playlist';
 
-const DEFAULT_MUSIC_URL = '/samples/gentle-memories.wav';
 const GESTURE_EVENTS = ['pointerdown', 'touchstart', 'keydown', 'click'] as const;
+/** Grace period so the music keeps going while one page swaps to the next. */
+const RELEASE_DELAY_MS = 1500;
 
-interface AudioToggleProps {
-  musicUrl: string;
-  inline?: boolean;
+function toPlayablePlaylist(playlist: string[] | undefined, musicUrl: string | undefined): string[] {
+  const list = normalizePlaylist(playlist);
+  if (list.length > 0) return list;
+  const single = (musicUrl || '').trim();
+  return [single || DEFAULT_MUSIC_URL];
+}
+
+interface AmbientAudioEngineProps {
+  playlist: string[];
   onAutoStart?: () => void;
 }
 
-export function AudioToggle({
-  musicUrl,
-  inline = false,
-  onAutoStart,
-}: AudioToggleProps) {
-  const effectiveMusicUrl = (musicUrl || '').trim() || DEFAULT_MUSIC_URL;
+/**
+ * The actual <audio> player: autoplays (or waits for the first gesture when
+ * the browser blocks autoplay), plays the playlist in order and loops back to
+ * the first track, and pauses while an unmuted <video> is playing.
+ */
+function AmbientAudioEngine({ playlist, onAutoStart }: AmbientAudioEngineProps) {
+  const [trackIndex, setTrackIndex] = useState(0);
+  const playlistKey = playlist.join('\n');
+  const safeIndex = trackIndex < playlist.length ? trackIndex : 0;
+  const currentSrc = playlist[safeIndex];
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pausedForVideoRef = useRef(false);
   const unmountedRef = useRef(false);
   const hasReportedAutoStartRef = useRef(false);
   const gestureAttachedRef = useRef(false);
+  const consecutiveErrorsRef = useRef(0);
   const onAutoStartRef = useRef(onAutoStart);
   onAutoStartRef.current = onAutoStart;
 
   const attemptPlayRef = useRef<() => void>(() => {});
+
+  // A changed playlist (edited in admin) starts again from its first track.
+  useEffect(() => {
+    setTrackIndex(0);
+    consecutiveErrorsRef.current = 0;
+  }, [playlistKey]);
 
   const detachGestureListeners = useCallback(() => {
     if (!gestureAttachedRef.current) return;
@@ -54,7 +82,6 @@ export function AudioToggle({
     if (!audio || unmountedRef.current || pausedForVideoRef.current) return;
 
     audio.volume = 0.35;
-    audio.loop = true;
 
     try {
       const playPromise = audio.play();
@@ -91,12 +118,14 @@ export function AudioToggle({
   useEffect(() => {
     unmountedRef.current = false;
     attemptPlay();
+  }, [currentSrc, attemptPlay]);
 
+  useEffect(() => {
     return () => {
       unmountedRef.current = true;
       detachGestureListeners();
     };
-  }, [effectiveMusicUrl, attemptPlay, detachGestureListeners]);
+  }, [detachGestureListeners]);
 
   useEffect(() => {
     function handleVideoPlay(event: Event) {
@@ -162,22 +191,129 @@ export function AudioToggle({
     attemptPlay();
   }
 
+  function goToNextTrack() {
+    setTrackIndex((prev) => (prev + 1) % playlist.length);
+  }
+
+  function handleEnded() {
+    consecutiveErrorsRef.current = 0;
+    if (playlist.length > 1) {
+      goToNextTrack();
+    }
+  }
+
+  function handleError() {
+    // Skip a broken track, but stop trying once every track has failed in a row.
+    consecutiveErrorsRef.current += 1;
+    if (playlist.length > 1 && consecutiveErrorsRef.current < playlist.length) {
+      goToNextTrack();
+    }
+  }
+
+  return (
+    <audio
+      ref={audioRef}
+      src={currentSrc}
+      autoPlay
+      loop={playlist.length === 1}
+      preload="auto"
+      data-testid="ambient-audio"
+      data-track-index={safeIndex}
+      onPlay={() => {
+        consecutiveErrorsRef.current = 0;
+        detachGestureListeners();
+      }}
+      onPause={handleUnexpectedPause}
+      onEnded={handleEnded}
+      onError={handleError}
+    />
+  );
+}
+
+interface AmbientAudioContextValue {
+  register: (playlist: string[], onAutoStart?: () => void) => () => void;
+}
+
+const AmbientAudioContext = createContext<AmbientAudioContextValue | null>(null);
+
+/**
+ * Lives in the root layout so a single player survives client-side page
+ * navigation (e.g. home → memory detail): the music keeps playing instead of
+ * restarting. Pages opt in by rendering <AudioToggle>; when no page asks for
+ * music (admin, login gate) the player stops after a short grace period.
+ */
+export function AmbientAudioProvider({ children }: { children: React.ReactNode }) {
+  const [playlist, setPlaylist] = useState<string[] | null>(null);
+  const ownersRef = useRef(0);
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onAutoStartRef = useRef<(() => void) | undefined>(undefined);
+
+  const register = useCallback((nextPlaylist: string[], onAutoStart?: () => void) => {
+    if (releaseTimerRef.current) {
+      clearTimeout(releaseTimerRef.current);
+      releaseTimerRef.current = null;
+    }
+    ownersRef.current += 1;
+    onAutoStartRef.current = onAutoStart;
+    const nextKey = nextPlaylist.join('\n');
+    setPlaylist((prev) => (prev && prev.join('\n') === nextKey ? prev : nextPlaylist));
+
+    return () => {
+      ownersRef.current = Math.max(0, ownersRef.current - 1);
+      if (ownersRef.current > 0) return;
+      releaseTimerRef.current = setTimeout(() => {
+        releaseTimerRef.current = null;
+        if (ownersRef.current === 0) setPlaylist(null);
+      }, RELEASE_DELAY_MS);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+    };
+  }, []);
+
+  const value = useMemo(() => ({ register }), [register]);
+  const handleAutoStart = useCallback(() => onAutoStartRef.current?.(), []);
+
+  return (
+    <AmbientAudioContext.Provider value={value}>
+      {children}
+      {playlist ? <AmbientAudioEngine playlist={playlist} onAutoStart={handleAutoStart} /> : null}
+    </AmbientAudioContext.Provider>
+  );
+}
+
+interface AudioToggleProps {
+  musicUrl?: string;
+  /** Ordered tracks; falls back to `musicUrl`, then the bundled sample. */
+  playlist?: string[];
+  inline?: boolean;
+  onAutoStart?: () => void;
+}
+
+export function AudioToggle({ musicUrl, playlist, inline = false, onAutoStart }: AudioToggleProps) {
+  const context = useContext(AmbientAudioContext);
+  const playableKey = toPlayablePlaylist(playlist, musicUrl).join('\n');
+  const playable = useMemo(() => playableKey.split('\n'), [playableKey]);
+  const onAutoStartRef = useRef(onAutoStart);
+  onAutoStartRef.current = onAutoStart;
+
+  useEffect(() => {
+    if (!context) return;
+    return context.register(playable, () => onAutoStartRef.current?.());
+  }, [context, playable]);
+
   const wrapperClassName = inline
     ? 'relative shrink-0'
     : 'fixed right-3 top-3 z-40 sm:right-6 sm:top-5';
 
   return (
     <div className={wrapperClassName}>
-      <audio
-        ref={audioRef}
-        src={effectiveMusicUrl}
-        autoPlay
-        loop
-        preload="auto"
-        data-testid="ambient-audio"
-        onPlay={detachGestureListeners}
-        onPause={handleUnexpectedPause}
-      />
+      {context ? null : (
+        <AmbientAudioEngine playlist={playable} onAutoStart={() => onAutoStartRef.current?.()} />
+      )}
       <div
         role="status"
         data-testid="ambient-music-pill"

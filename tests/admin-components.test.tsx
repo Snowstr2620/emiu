@@ -407,6 +407,98 @@ describe('AdminDashboard 5-tab UI', () => {
     expect(screen.getByRole('heading', { name: 'Gửi em yêu dấu,' })).toBeInTheDocument();
   });
 
+  test('Tab 2 builds a music playlist (upload, link, reorder, remove) and saves it in order', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock-audio'),
+      revokeObjectURL: vi.fn(),
+    });
+    const initial = makeInitialData();
+    let uploadCount = 0;
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/admin/upload-url') {
+        return new Response(
+          JSON.stringify({ mode: 'local', uploadEndpoint: '/api/admin/upload' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/upload' && init?.method === 'POST') {
+        uploadCount += 1;
+        return new Response(
+          JSON.stringify({ publicUrl: `/uploads/1731840000000-aaaa111${uploadCount}-song-${uploadCount}.mp3` }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/settings') {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({ settings: { ...initial.settings, ...body } }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected' }), { status: 500 });
+    });
+
+    render(<AdminDashboard initialData={initial} storageStatus={STORAGE_STATUS} />);
+    await user.click(screen.getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i }));
+
+    // Starts with the saved sample track
+    expect(screen.getAllByTestId('playlist-track')).toHaveLength(1);
+
+    // Upload two songs at once
+    const fileInput = screen
+      .getByText(/Tải file nhạc/i)
+      .closest('label')!
+      .querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toHaveAttribute('multiple');
+    await user.upload(fileInput, [
+      new File(['a'], 'em-oi.mp3', { type: 'audio/mpeg' }),
+      new File(['b'], 'mua-he.mp3', { type: 'audio/mpeg' }),
+    ]);
+
+    // Add a link with Enter
+    const linkInput = screen.getByLabelText(/Đường dẫn nhạc nền/i);
+    await user.type(linkInput, 'https://cdn.example.com/music/dem-trang.m4a{Enter}');
+
+    let tracks = screen.getAllByTestId('playlist-track');
+    expect(tracks).toHaveLength(4);
+    expect(within(tracks[1]).getByText('em-oi.mp3')).toBeInTheDocument();
+    expect(within(tracks[1]).getByText('Chưa lưu')).toBeInTheDocument();
+    expect(within(tracks[3]).getByText('dem-trang.m4a')).toBeInTheDocument();
+
+    // Remove the sample, then move the link to the top
+    await user.click(screen.getByRole('button', { name: 'Xoá bài 1 khỏi danh sách' }));
+    await user.click(screen.getByRole('button', { name: 'Đưa bài 3 lên trên' }));
+    await user.click(screen.getByRole('button', { name: 'Đưa bài 2 lên trên' }));
+    tracks = screen.getAllByTestId('playlist-track');
+    expect(within(tracks[0]).getByText('dem-trang.m4a')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Lưu cài đặt/i }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/admin/settings',
+        expect.objectContaining({ method: 'PUT' })
+      );
+    });
+    const settingsCall = fetchSpy.mock.calls.find(([url]) => url === '/api/admin/settings');
+    const sentBody = JSON.parse(String((settingsCall?.[1] as RequestInit).body));
+    expect(sentBody.musicPlaylist).toEqual([
+      'https://cdn.example.com/music/dem-trang.m4a',
+      '/uploads/1731840000000-aaaa1111-song-1.mp3',
+      '/uploads/1731840000000-aaaa1112-song-2.mp3',
+    ]);
+    expect(sentBody.musicUrl).toBe('https://cdn.example.com/music/dem-trang.m4a');
+
+    // After saving, uploaded tracks are no longer marked as unsaved
+    await waitFor(() => {
+      expect(screen.queryByText('Chưa lưu')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('song-1.mp3')).toBeInTheDocument();
+  });
+
   test('Tab 2 saves settings without legacy viewerPasscode and offers quick jump to Tab 4', async () => {
     const user = userEvent.setup();
     const initial = makeInitialData();

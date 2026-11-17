@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { parseIsoDateParts } from '@/lib/date-utils';
 import { isVideoMediaUrl, MAX_ALBUM_IMAGES } from '@/lib/memory-album';
+import { MAX_MUSIC_TRACKS, normalizePlaylist } from '@/lib/music-playlist';
 import type { ActivityEventType, DiaryMood, MemoryImageItem, UserRole } from '@/types/memories';
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -309,6 +310,7 @@ export interface ValidatedSettingsPayload {
   heroSubtitle: string;
   loveStartDate: string;
   musicUrl: string;
+  musicPlaylist: string[];
   musicEnabled: boolean;
   letterTitle: string;
   letterBody: string;
@@ -345,6 +347,17 @@ export function validateSettingsPayload(
   if (musicUrl && !isValidMediaUrl(musicUrl)) {
     return { error: 'Đường dẫn nhạc nền không hợp lệ.' };
   }
+  if (r.musicPlaylist !== undefined && !Array.isArray(r.musicPlaylist)) {
+    return { error: 'Danh sách nhạc nền không hợp lệ.' };
+  }
+  const musicPlaylist =
+    r.musicPlaylist !== undefined ? normalizePlaylist(r.musicPlaylist) : musicUrl ? [musicUrl] : [];
+  if (musicPlaylist.length > MAX_MUSIC_TRACKS) {
+    return { error: `Danh sách nhạc nền tối đa ${MAX_MUSIC_TRACKS} bài.` };
+  }
+  if (musicPlaylist.some((url) => !isValidMediaUrl(url))) {
+    return { error: 'Đường dẫn nhạc nền không hợp lệ.' };
+  }
   if (!letterTitle || !letterBody) {
     return { error: 'Vui lòng nhập tiêu đề và nội dung bức tâm thư.' };
   }
@@ -357,7 +370,8 @@ export function validateSettingsPayload(
       coupleTitle: coupleTitle.slice(0, 100),
       heroSubtitle: heroSubtitle.slice(0, 300),
       loveStartDate,
-      musicUrl,
+      musicUrl: musicPlaylist[0] ?? musicUrl,
+      musicPlaylist,
       musicEnabled,
       letterTitle: letterTitle.slice(0, 140),
       letterBody: letterBody.slice(0, 6000),

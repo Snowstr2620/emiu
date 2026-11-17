@@ -220,7 +220,7 @@ export function MemoryAlbumDetailView({
                 </Link>
               )}
 
-              <AudioToggle inline musicUrl={settings.musicUrl} />
+              <AudioToggle inline musicUrl={settings.musicUrl} playlist={settings.musicPlaylist} />
             </div>
           </div>
         </div>

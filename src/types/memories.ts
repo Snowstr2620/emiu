@@ -79,7 +79,10 @@ export interface SiteSettings {
   coupleTitle: string;
   heroSubtitle: string;
   loveStartDate: string; // YYYY-MM-DD
+  /** First track of the playlist (kept for older data and single-track setups). */
   musicUrl: string;
+  /** Ordered background-music playlist; plays in order and loops back to the first track. */
+  musicPlaylist?: string[];
   musicEnabled: boolean;
   letterTitle: string;
   letterBody: string;

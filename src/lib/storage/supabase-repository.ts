@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { hashPasscode } from '@/lib/auth';
 import { getMemoryImages } from '@/lib/memory-album';
+import { getMusicPlaylist, normalizePlaylist } from '@/lib/music-playlist';
 import {
   assertCanModifyActiveAdmin,
   buildInitialUsers,
@@ -54,6 +55,8 @@ interface DbSettingsRow {
   hero_subtitle: string;
   love_start_date: string;
   music_url: string;
+  /** jsonb array of track URLs; may be absent on databases created before playlists existed. */
+  music_playlist?: unknown;
   music_enabled: boolean;
   letter_title: string;
   letter_body: string;
@@ -124,6 +127,7 @@ function mapSettingsRow(row: DbSettingsRow): SiteSettings {
     heroSubtitle: row.hero_subtitle,
     loveStartDate: row.love_start_date,
     musicUrl: row.music_url,
+    musicPlaylist: normalizePlaylist(row.music_playlist),
     musicEnabled: row.music_enabled,
     letterTitle: row.letter_title,
     letterBody: row.letter_body,
@@ -462,6 +466,7 @@ export class SupabaseStorageRepository implements StorageRepository {
           hero_subtitle: input.heroSubtitle,
           love_start_date: input.loveStartDate,
           music_url: input.musicUrl,
+          music_playlist: input.musicPlaylist,
           music_enabled: input.musicEnabled,
           letter_title: input.letterTitle,
           letter_body: input.letterBody,
@@ -479,12 +484,11 @@ export class SupabaseStorageRepository implements StorageRepository {
       throw new Error(`Không thể lưu cài đặt Supabase: ${error?.message}`);
     }
 
-    if (
-      current.musicUrl &&
-      current.musicUrl !== input.musicUrl &&
-      !(await this.isMediaUrlReferenced(current.musicUrl))
-    ) {
-      await this.deleteStoredFileByUrl(current.musicUrl);
+    const nextTracks = new Set([input.musicUrl, ...input.musicPlaylist]);
+    for (const url of new Set([current.musicUrl, ...getMusicPlaylist(current)])) {
+      if (url && !nextTracks.has(url) && !(await this.isMediaUrlReferenced(url))) {
+        await this.deleteStoredFileByUrl(url);
+      }
     }
 
     return stripSettingsForAdmin(mapSettingsRow(data));
@@ -804,6 +808,7 @@ export class SupabaseStorageRepository implements StorageRepository {
       ]);
 
     if (settingsRow?.music_url === trimmed) return true;
+    if (normalizePlaylist(settingsRow?.music_playlist).includes(trimmed)) return true;
     if (
       Array.isArray(memRows) &&
       memRows.some(

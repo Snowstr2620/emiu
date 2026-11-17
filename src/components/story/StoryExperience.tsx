@@ -373,7 +373,7 @@ export function StoryExperience({
 
             {/* Right Controls: Always-On Ambient Music Pill + Mobile Drawer Trigger + Desktop Account Bar */}
             <div className="flex shrink-0 items-center gap-2">
-              <AudioToggle inline musicUrl={settings.musicUrl} />
+              <AudioToggle inline musicUrl={settings.musicUrl} playlist={settings.musicPlaylist} />
 
               {hasAccountMenu && (
                 <>

@@ -56,7 +56,6 @@ import {
 } from '@/lib/admin-upload';
 import {
   CLIENT_AUDIO_RULE,
-  createManagedDropHandlers,
   createManagedMultiDropHandlers,
   getDroppedOrPastedFiles,
   validateClientUploadFile,
@@ -64,6 +63,12 @@ import {
   VISUAL_MEDIA_ACCEPT,
 } from '@/lib/client-dropzone';
 import { convertHeicFiles, HEIC_CONVERT_ERROR_MESSAGE, isHeicFile } from '@/lib/heic';
+import {
+  DEFAULT_MUSIC_URL,
+  getMusicPlaylist,
+  getTrackDisplayName,
+  MAX_MUSIC_TRACKS,
+} from '@/lib/music-playlist';
 import {
   formatAlbumMediaCountVi,
   getMemoryImages,
@@ -131,7 +136,6 @@ interface SettingsFormState {
   coupleTitle: string;
   heroSubtitle: string;
   loveStartDate: string;
-  musicUrl: string;
   musicEnabled: boolean;
   letterTitle: string;
   letterBody: string;
@@ -280,12 +284,31 @@ function getTodayVietnamIso(): string {
   return `${vn.year}-${String(vn.month).padStart(2, '0')}-${String(vn.day).padStart(2, '0')}`;
 }
 
+interface PlaylistDraftItem {
+  id: string;
+  /** Saved track URL, or '' for a newly picked file that is not uploaded yet. */
+  url: string;
+  file?: File;
+  previewUrl?: string;
+}
+
+function makePlaylistItemId(): string {
+  return `track-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function toPlaylistDraft(settings: AdminSiteSettings): PlaylistDraftItem[] {
+  return getMusicPlaylist(settings).map((url) => ({ id: makePlaylistItemId(), url }));
+}
+
+function isLikelyMediaLink(url: string): boolean {
+  return url.startsWith('/') || /^https?:\/\//i.test(url);
+}
+
 function toSettingsForm(settings: AdminSiteSettings): SettingsFormState {
   return {
     coupleTitle: settings.coupleTitle,
     heroSubtitle: settings.heroSubtitle,
     loveStartDate: settings.loveStartDate,
-    musicUrl: settings.musicUrl,
     musicEnabled: settings.musicEnabled,
     letterTitle: settings.letterTitle,
     letterBody: settings.letterBody,
@@ -445,8 +468,12 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
   const [reordering, setReordering] = useState(false);
 
   // Audio upload state in Settings tab
-  const [pendingAudioFile, setPendingAudioFile] = useState<File | null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [playlistDraft, setPlaylistDraft] = useState<PlaylistDraftItem[]>(() =>
+    toPlaylistDraft(initialData.settings)
+  );
+  const [newTrackUrl, setNewTrackUrl] = useState('');
+  const playlistDraftRef = useRef(playlistDraft);
+  playlistDraftRef.current = playlistDraft;
   const [isDraggingAudio, setIsDraggingAudio] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -483,9 +510,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
   useEffect(() => {
     return () => {
-      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+      for (const item of playlistDraftRef.current) {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      }
     };
-  }, [audioPreviewUrl]);
+  }, []);
 
   const liveDaysTogether = useMemo(
     () => calculateDaysTogether(settingsForm.loveStartDate),
@@ -543,15 +572,69 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
     }
   }
 
-  function clearAudioFilePreview() {
-    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
-    setAudioPreviewUrl(null);
-    setPendingAudioFile(null);
+  function replacePlaylistDraft(next: PlaylistDraftItem[]) {
+    for (const item of playlistDraftRef.current) {
+      if (item.previewUrl && !next.includes(item)) URL.revokeObjectURL(item.previewUrl);
+    }
+    setPlaylistDraft(next);
     dragDepthRef.current.audio = 0;
     setIsDraggingAudio(false);
     if (audioFileInputRef.current) {
       audioFileInputRef.current.value = '';
     }
+  }
+
+  function addPlaylistItems(items: PlaylistDraftItem[]): boolean {
+    const remaining = MAX_MUSIC_TRACKS - playlistDraftRef.current.length;
+    if (remaining <= 0) {
+      for (const item of items) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      showError(`Danh sách nhạc nền tối đa ${MAX_MUSIC_TRACKS} bài.`);
+      return false;
+    }
+    const accepted = items.slice(0, remaining);
+    for (const item of items.slice(remaining)) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    }
+    playlistDraftRef.current = [...playlistDraftRef.current, ...accepted];
+    setPlaylistDraft(playlistDraftRef.current);
+    if (items.length > remaining) {
+      showError(`Chỉ thêm được ${accepted.length} bài (danh sách tối đa ${MAX_MUSIC_TRACKS} bài).`);
+    } else {
+      setNotice(null);
+    }
+    return true;
+  }
+
+  function addPlaylistUrl(rawUrl: string): boolean {
+    const url = rawUrl.trim();
+    if (!url) return false;
+    if (!isLikelyMediaLink(url)) {
+      showError('Link nhạc phải bắt đầu bằng https:// hoặc /');
+      return false;
+    }
+    if (playlistDraftRef.current.some((item) => item.url === url)) {
+      showError('Bài này đã có trong danh sách.');
+      return false;
+    }
+    return addPlaylistItems([{ id: makePlaylistItemId(), url }]);
+  }
+
+  function movePlaylistItem(index: number, delta: -1 | 1) {
+    setPlaylistDraft((prev) => {
+      const target = index + delta;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function removePlaylistItem(id: string) {
+    setPlaylistDraft((prev) => {
+      const removed = prev.find((item) => item.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((item) => item.id !== id);
+    });
   }
 
   function applyMemoryImageFiles(files: File[], openFormIfClosed = false): boolean {
@@ -710,30 +793,33 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
     }
   }
 
-  function applyAudioFile(file: File): boolean {
-    const err = validateClientUploadFile(file, CLIENT_AUDIO_RULE);
-    if (err) {
-      showError(err);
+  function applyAudioFiles(files: File[]): boolean {
+    const valid: PlaylistDraftItem[] = [];
+    let firstError: string | null = null;
+    for (const file of files) {
+      const err = validateClientUploadFile(file, CLIENT_AUDIO_RULE);
+      if (err) {
+        firstError ??= err;
+        continue;
+      }
+      valid.push({
+        id: makePlaylistItemId(),
+        url: '',
+        file,
+        previewUrl: URL.createObjectURL(file),
+      });
+    }
+    if (valid.length === 0) {
+      if (firstError) showError(firstError);
       return false;
     }
-
-    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
-    setPendingAudioFile(file);
-    setAudioPreviewUrl(URL.createObjectURL(file));
-    setNotice(null);
-    return true;
-  }
-
-  function createFileDropHandlers(
-    zoneKey: 'quick' | 'memory' | 'audio',
-    setDragging: (active: boolean) => void,
-    onFile: (file: File) => void
-  ) {
-    return createManagedDropHandlers(dragDepthRef, zoneKey, setDragging, onFile);
+    const added = addPlaylistItems(valid);
+    if (added && firstError) showError(firstError);
+    return added;
   }
 
   function createMultiFileDropHandlers(
-    zoneKey: 'quick' | 'memory',
+    zoneKey: 'quick' | 'memory' | 'audio',
     setDragging: (active: boolean) => void,
     onFiles: (files: File[]) => void
   ) {
@@ -1050,13 +1136,21 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
     setSavingSettings(true);
     setNotice(null);
-    let newlyUploadedAudioUrl: string | null = null;
+    const newlyUploadedAudioUrls: string[] = [];
+    const cleanupNewAudio = async () => {
+      await Promise.all(newlyUploadedAudioUrls.map((url) => cleanupUploadedUrl(url)));
+    };
 
     try {
-      let finalMusicUrl = settingsForm.musicUrl.trim();
-      if (pendingAudioFile) {
-        newlyUploadedAudioUrl = await uploadMediaFile(pendingAudioFile, 'audio');
-        finalMusicUrl = newlyUploadedAudioUrl;
+      const finalPlaylist: string[] = [];
+      for (const item of playlistDraft) {
+        if (item.file) {
+          const uploadedUrl = await uploadMediaFile(item.file, 'audio');
+          newlyUploadedAudioUrls.push(uploadedUrl);
+          finalPlaylist.push(uploadedUrl);
+        } else if (item.url.trim()) {
+          finalPlaylist.push(item.url.trim());
+        }
       }
 
       const res = await fetch('/api/admin/settings', {
@@ -1066,7 +1160,8 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
           coupleTitle: settingsForm.coupleTitle,
           heroSubtitle: settingsForm.heroSubtitle,
           loveStartDate: settingsForm.loveStartDate,
-          musicUrl: finalMusicUrl || '/samples/gentle-memories.wav',
+          musicUrl: finalPlaylist[0] || DEFAULT_MUSIC_URL,
+          musicPlaylist: finalPlaylist,
           musicEnabled: true,
           letterTitle: settingsForm.letterTitle,
           letterBody: settingsForm.letterBody,
@@ -1076,7 +1171,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       });
 
       if (res.status === 401) {
-        if (newlyUploadedAudioUrl) await cleanupUploadedUrl(newlyUploadedAudioUrl);
+        await cleanupNewAudio();
         handleUnauthorized();
         return;
       }
@@ -1087,16 +1182,16 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       };
 
       if (!res.ok || !payload.settings) {
-        if (newlyUploadedAudioUrl) await cleanupUploadedUrl(newlyUploadedAudioUrl);
+        await cleanupNewAudio();
         showError(payload.error || 'Không thể lưu cài đặt.');
         return;
       }
 
       setSettingsForm(toSettingsForm(payload.settings));
-      clearAudioFilePreview();
+      replacePlaylistDraft(toPlaylistDraft(payload.settings));
       showSuccess(successText);
     } catch (err) {
-      if (newlyUploadedAudioUrl) await cleanupUploadedUrl(newlyUploadedAudioUrl);
+      await cleanupNewAudio();
       if (err instanceof UploadAuthError) {
         handleUnauthorized();
         return;
@@ -1432,7 +1527,6 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
   const isActivePreviewVideo = coverDraftItem
     ? coverDraftItem.mediaType === 'video'
     : isVideoMediaUrl(memoryForm.imageUrl.trim());
-  const activeAudioPreview = audioPreviewUrl || settingsForm.musicUrl.trim();
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden px-3 pb-24 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-6 sm:pt-6 lg:px-8">
@@ -2247,11 +2341,11 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
               />
             </div>
 
-            {/* Ambient music block */}
+            {/* Ambient music playlist block */}
             <div
               data-testid="audio-file-dropzone"
-              {...createFileDropHandlers('audio', setIsDraggingAudio, (file) =>
-                applyAudioFile(file)
+              {...createMultiFileDropHandlers('audio', setIsDraggingAudio, (files) =>
+                applyAudioFiles(files)
               )}
               className={`space-y-4 rounded-2xl border p-3 transition sm:p-4 ${isDraggingAudio
                 ? 'border-red-500 bg-amber-100/70 ring-2 ring-red-500/35'
@@ -2262,7 +2356,9 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 <div className="flex items-center gap-2">
                   <Music className="h-4 w-4 text-red-500" />
                   <span className="text-sm font-semibold text-stone-900">
-                    {isDraggingAudio ? 'Thả file nhạc vào đây' : 'Nhạc nền nhẹ nhàng'}
+                    {isDraggingAudio
+                      ? 'Thả file nhạc vào đây'
+                      : `Danh sách nhạc nền (${playlistDraft.length}/${MAX_MUSIC_TRACKS})`}
                   </span>
                 </div>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-800">
@@ -2270,6 +2366,78 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                   <span>Luôn phát tự động mặc định</span>
                 </span>
               </div>
+              <p className="text-xs text-stone-600">
+                Phát lần lượt từ trên xuống, hết bài cuối tự quay lại bài đầu. Nhạc vẫn chạy tiếp khi
+                mở trang chi tiết kỷ niệm. Nhớ bấm <strong>Lưu</strong> để áp dụng.
+              </p>
+
+              <ol aria-label="Danh sách nhạc nền" className="space-y-2">
+                {playlistDraft.length === 0 ? (
+                  <li className="rounded-xl border border-dashed border-amber-300/80 bg-[#FFFDF5]/80 px-3 py-3 text-xs text-stone-600">
+                    Chưa có bài nào — website sẽ phát nhạc mẫu.
+                  </li>
+                ) : (
+                  playlistDraft.map((item, idx) => {
+                    const trackName = item.file ? item.file.name : getTrackDisplayName(item.url);
+                    return (
+                      <li
+                        key={item.id}
+                        data-testid="playlist-track"
+                        className="min-w-0 space-y-2 rounded-xl border border-amber-200 bg-[#FFFDF5] p-2.5"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="w-6 shrink-0 text-center text-xs font-bold text-red-600">
+                            {idx + 1}
+                          </span>
+                          <span
+                            className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900"
+                            title={trackName}
+                          >
+                            {trackName}
+                          </span>
+                          {item.file ? (
+                            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                              Chưa lưu
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => movePlaylistItem(idx, -1)}
+                            disabled={idx === 0}
+                            aria-label={`Đưa bài ${idx + 1} lên trên`}
+                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg disabled:opacity-40 ${ADMIN_SECONDARY_BTN_CLASS}`}
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => movePlaylistItem(idx, 1)}
+                            disabled={idx === playlistDraft.length - 1}
+                            aria-label={`Đưa bài ${idx + 1} xuống dưới`}
+                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg disabled:opacity-40 ${ADMIN_SECONDARY_BTN_CLASS}`}
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removePlaylistItem(item.id)}
+                            aria-label={`Xoá bài ${idx + 1} khỏi danh sách`}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <audio
+                          controls
+                          preload="none"
+                          src={item.previewUrl || item.url}
+                          className="h-9 w-full min-w-0 max-w-full"
+                        />
+                      </li>
+                    );
+                  })
+                )}
+              </ol>
 
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)]">
                 <div className="min-w-0">
@@ -2279,54 +2447,56 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                   <input
                     id="settings-music-url"
                     type="text"
-                    value={settingsForm.musicUrl}
-                    onChange={(e) => {
-                      clearAudioFilePreview();
-                      setSettingsForm((prev) => ({ ...prev, musicUrl: e.target.value }));
+                    value={newTrackUrl}
+                    onChange={(e) => setNewTrackUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (addPlaylistUrl(newTrackUrl)) setNewTrackUrl('');
+                      }
                     }}
-                    placeholder="/samples/gentle-memories.wav hoặc https://..."
+                    placeholder="Dán link nhạc (https://... hoặc /uploads/...)"
                     className={ADMIN_INPUT_CLASS}
                   />
                 </div>
                 <div className="flex min-w-0 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (addPlaylistUrl(newTrackUrl)) setNewTrackUrl('');
+                    }}
+                    className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-2xl px-3 py-2.5 text-xs font-medium ${ADMIN_SECONDARY_BTN_CLASS}`}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Thêm link
+                  </button>
                   <label className="inline-flex min-h-[36px] min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-2xl border border-amber-300/80 bg-[#FFFDF5] px-3.5 py-2.5 text-xs font-semibold text-stone-800 transition focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/30 hover:border-amber-400 hover:bg-amber-100/75">
                     <Upload className="h-3.5 w-3.5 shrink-0" />
                     <span className="min-w-0 max-w-full truncate sm:max-w-[220px]">
-                      {pendingAudioFile ? pendingAudioFile.name : 'Tải file nhạc (MP3/M4A/WAV)'}
+                      Tải file nhạc (MP3/M4A/WAV)
                     </span>
                     <input
                       ref={audioFileInputRef}
                       type="file"
+                      multiple
                       accept="audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/wav,.mp3,.m4a,.wav"
                       className="sr-only"
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (!applyAudioFile(file)) {
-                          e.target.value = '';
-                        }
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length > 0) applyAudioFiles(files);
+                        e.target.value = '';
                       }}
                     />
                   </label>
                   <button
                     type="button"
-                    onClick={() => {
-                      clearAudioFilePreview();
-                      setSettingsForm((prev) => ({
-                        ...prev,
-                        musicUrl: '/samples/gentle-memories.wav',
-                      }));
-                    }}
+                    onClick={() => addPlaylistUrl(DEFAULT_MUSIC_URL)}
                     className={`inline-flex min-h-[36px] items-center rounded-2xl px-3 py-2.5 text-xs font-medium ${ADMIN_SECONDARY_BTN_CLASS}`}
                   >
-                    Dùng nhạc mẫu
+                    Thêm nhạc mẫu
                   </button>
                 </div>
               </div>
-
-              {activeAudioPreview ? (
-                <audio controls src={activeAudioPreview} className="mt-2 w-full min-w-0 max-w-full" />
-              ) : null}
             </div>
 
             {/* Viewer access gate toggle + Tab 4 link */}

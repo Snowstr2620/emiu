@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { hashPasscode } from '@/lib/auth';
 import { getMemoryImages } from '@/lib/memory-album';
+import { getMusicPlaylist } from '@/lib/music-playlist';
 import {
   assertCanModifyActiveAdmin,
   computeTrafficSummary,
@@ -88,6 +89,7 @@ function isUrlReferencedInDb(db: LocalDbSchema, url: string): boolean {
   const trimmed = url.trim();
   if (!trimmed) return false;
   if (db.settings.musicUrl === trimmed) return true;
+  if (getMusicPlaylist(db.settings).includes(trimmed)) return true;
   if (db.memories.some((m) => m.imageUrl === trimmed || getMemoryImages(m).some((i) => i.url === trimmed))) {
     return true;
   }
@@ -213,7 +215,7 @@ export class LocalStorageRepository implements StorageRepository {
   async updateSettings(input: ValidatedSettingsPayload): Promise<AdminSiteSettings> {
     return this.withWriteLock(async () => {
       const db = this.readDb();
-      const previousMusicUrl = db.settings.musicUrl;
+      const previousTracks = [db.settings.musicUrl, ...getMusicPlaylist(db.settings)];
 
       const nextHash = input.viewerPasscode
         ? hashPasscode(input.viewerPasscode)
@@ -224,6 +226,7 @@ export class LocalStorageRepository implements StorageRepository {
         heroSubtitle: input.heroSubtitle,
         loveStartDate: input.loveStartDate,
         musicUrl: input.musicUrl,
+        musicPlaylist: input.musicPlaylist,
         musicEnabled: input.musicEnabled,
         letterTitle: input.letterTitle,
         letterBody: input.letterBody,
@@ -235,12 +238,10 @@ export class LocalStorageRepository implements StorageRepository {
 
       this.writeDb(db);
 
-      if (
-        previousMusicUrl &&
-        previousMusicUrl !== input.musicUrl &&
-        !isUrlReferencedInDb(db, previousMusicUrl)
-      ) {
-        await this.deleteStoredFileByUrl(previousMusicUrl);
+      for (const url of new Set(previousTracks)) {
+        if (url && !isUrlReferencedInDb(db, url)) {
+          await this.deleteStoredFileByUrl(url);
+        }
       }
 
       return stripSettingsForAdmin(db.settings);
