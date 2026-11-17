@@ -1,4 +1,8 @@
-import { isSessionSecretConfigured, resolveViewerSession } from '@/lib/auth';
+import {
+  isSessionSecretConfigured,
+  resolveAdminSession,
+  resolveViewerSession,
+} from '@/lib/auth';
 import { ProductionSetupError } from '@/lib/seed-data';
 import { getStorageRepository } from '@/lib/storage';
 import { ProductionSetupNotice } from '@/components/story/ProductionSetupNotice';
@@ -56,10 +60,13 @@ export default async function HomePage() {
     );
   }
 
+  const activeUser =
+    session.user ?? (!data.settings.viewerPasscodeEnabled ? await resolveAdminSession(repository) : null);
+
   return (
     <StoryExperience
       data={data}
-      currentUser={session.user}
+      currentUser={activeUser}
       viewerPasscodeEnabled={data.settings.viewerPasscodeEnabled}
     />
   );

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { hashPasscode } from '@/lib/auth';
+import { getMemoryImages } from '@/lib/memory-album';
 import {
   assertCanModifyActiveAdmin,
   buildInitialUsers,
@@ -10,6 +11,7 @@ import {
   normalizeActivityLimit,
   sanitizeUserForClient,
   shouldBumpSessionVersion,
+  sortDiaryEntries,
   stripSettingsForAdmin,
   stripSettingsForPublic,
 } from '@/lib/seed-data';
@@ -17,12 +19,14 @@ import {
   sanitizeStorageFileName,
   UploadKind,
   ValidatedCreateUserPayload,
-  ValidatedMemoryPayload,
+  ValidatedDiaryEntryPayload,
   ValidatedSettingsPayload,
   ValidatedUpdateUserPayload,
 } from '@/lib/validation';
 import {
+  CreateDiaryEntryInput,
   ListActivityLogsFilter,
+  MemoryMutationInput,
   RecordActivityInput,
   SignedUploadTarget,
   StorageRepository,
@@ -34,6 +38,9 @@ import {
   AdminSiteData,
   AdminSiteSettings,
   AppUser,
+  DiaryEntry,
+  DiaryMood,
+  MemoryImageItem,
   MemoryItem,
   PublicSiteData,
   SafeAppUser,
@@ -63,6 +70,7 @@ interface DbMemoryRow {
   story: string;
   image_url: string;
   image_alt: string;
+  images?: MemoryImageItem[] | null;
   sort_order: number;
   created_at: string;
 }
@@ -94,6 +102,22 @@ interface DbActivityLogRow {
   created_at: string;
 }
 
+interface DbDiaryEntryRow {
+  id: string;
+  entry_date: string;
+  title: string;
+  content: string;
+  mood: DiaryMood;
+  image_url: string;
+  image_alt: string;
+  author_id: string | null;
+  author_username: string;
+  author_display_name: string;
+  author_role: UserRole;
+  created_at: string;
+  updated_at: string;
+}
+
 function mapSettingsRow(row: DbSettingsRow): SiteSettings {
   return {
     coupleTitle: row.couple_title,
@@ -111,16 +135,29 @@ function mapSettingsRow(row: DbSettingsRow): SiteSettings {
 }
 
 function mapMemoryRow(row: DbMemoryRow): MemoryItem {
+  const images = getMemoryImages({
+    title: row.title,
+    imageUrl: row.image_url,
+    imageAlt: row.image_alt,
+    images: Array.isArray(row.images) ? row.images : undefined,
+  });
   return {
     id: row.id,
     memoryDate: row.memory_date,
     title: row.title,
     story: row.story,
-    imageUrl: row.image_url,
-    imageAlt: row.image_alt,
+    imageUrl: images[0]?.url || row.image_url,
+    imageAlt: images[0]?.alt || row.image_alt,
+    images,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
   };
+}
+
+function isMissingImagesColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === '42703' || error.code === 'PGRST204') return true;
+  return /memories.*images|column.*images.*does not exist/i.test(error.message || '');
 }
 
 function mapUserRow(row: DbAppUserRow): AppUser {
@@ -152,6 +189,30 @@ function mapActivityRow(row: DbActivityLogRow): ActivityLogItem {
     metadata: row.metadata ?? null,
     createdAt: row.created_at,
   };
+}
+
+function mapDiaryRow(row: DbDiaryEntryRow): DiaryEntry {
+  return {
+    id: row.id,
+    entryDate: row.entry_date,
+    title: row.title || '',
+    content: row.content || '',
+    mood: row.mood || 'loved',
+    imageUrl: row.image_url || '',
+    imageAlt: row.image_alt || '',
+    authorId: row.author_id ?? null,
+    authorUsername: row.author_username,
+    authorDisplayName: row.author_display_name,
+    authorRole: row.author_role,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+  };
+}
+
+function isMissingDiaryTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === '42P01' || error.code === 'PGRST205') return true;
+  return /diary_entries.*does not exist|schema cache/i.test(error.message || '');
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -353,18 +414,23 @@ export class SupabaseStorageRepository implements StorageRepository {
   }
 
   async getPublicData(): Promise<PublicSiteData> {
-    const { settings, memories } = await this.ensureInitializedAndFetch();
+    const [{ settings, memories }, diaryEntries] = await Promise.all([
+      this.ensureInitializedAndFetch(),
+      this.listDiaryEntries(),
+    ]);
     return {
       settings: stripSettingsForPublic(settings),
       memories,
+      diaryEntries,
     };
   }
 
   async getAdminData(currentUserId?: string | null): Promise<AdminSiteData> {
     const { settings, memories } = await this.ensureInitializedAndFetch();
-    const [rawUsers, allLogsForSummary] = await Promise.all([
+    const [rawUsers, allLogsForSummary, diaryEntries] = await Promise.all([
       this.listRawUsers(),
       this.listActivityLogs({ limit: 500 }),
+      this.listDiaryEntries(),
     ]);
 
     const users = rawUsers.map(sanitizeUserForClient);
@@ -373,6 +439,7 @@ export class SupabaseStorageRepository implements StorageRepository {
     return {
       settings: stripSettingsForAdmin(settings),
       memories,
+      diaryEntries,
       users,
       activityLogs: allLogsForSummary.slice(0, 200),
       trafficSummary: computeTrafficSummary(allLogsForSummary, rawUsers),
@@ -412,50 +479,24 @@ export class SupabaseStorageRepository implements StorageRepository {
       throw new Error(`Không thể lưu cài đặt Supabase: ${error?.message}`);
     }
 
-    if (current.musicUrl && current.musicUrl !== input.musicUrl) {
+    if (
+      current.musicUrl &&
+      current.musicUrl !== input.musicUrl &&
+      !(await this.isMediaUrlReferenced(current.musicUrl))
+    ) {
       await this.deleteStoredFileByUrl(current.musicUrl);
     }
 
     return stripSettingsForAdmin(mapSettingsRow(data));
   }
 
-  async createMemory(input: ValidatedMemoryPayload): Promise<MemoryItem> {
-    const { data: existing } = await this.client
-      .from('memories')
-      .select('sort_order')
-      .order('sort_order', { ascending: false })
-      .limit(1)
-      .maybeSingle<{ sort_order: number }>();
-
-    const nextSortOrder = (existing?.sort_order ?? -1) + 1;
-
-    const { data, error } = await this.client
-      .from('memories')
-      .insert({
-        memory_date: input.memoryDate,
-        title: input.title,
-        story: input.story,
-        image_url: input.imageUrl,
-        image_alt: input.imageAlt,
-        sort_order: nextSortOrder,
-      })
-      .select('*')
-      .single<DbMemoryRow>();
-
-    if (error || !data) {
-      throw new Error(`Không thể thêm kỷ niệm mới: ${error?.message}`);
-    }
-
-    return mapMemoryRow(data);
-  }
-
-  private async findMemoryImageUrl(id: string): Promise<{ image_url: string } | null> {
+  async getMemoryById(id: string): Promise<MemoryItem | null> {
     if (!id || !UUID_REGEX.test(id)) return null;
     const { data, error } = await this.client
       .from('memories')
-      .select('image_url')
+      .select('*')
       .eq('id', id)
-      .maybeSingle<{ image_url: string }>();
+      .maybeSingle<DbMemoryRow>();
 
     if (error) {
       if (error.code === 'PGRST116' || error.code === '22P02') {
@@ -464,48 +505,317 @@ export class SupabaseStorageRepository implements StorageRepository {
       throw new Error(`Lỗi truy vấn kỷ niệm Supabase: ${error.message}`);
     }
 
-    return data ?? null;
+    return data ? mapMemoryRow(data) : null;
   }
 
-  async updateMemory(id: string, input: ValidatedMemoryPayload): Promise<MemoryItem | null> {
-    const existing = await this.findMemoryImageUrl(id);
+  async createMemory(input: MemoryMutationInput): Promise<MemoryItem> {
+    const { data: existing } = await this.client
+      .from('memories')
+      .select('sort_order')
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ sort_order: number }>();
+
+    const nextSortOrder = (existing?.sort_order ?? -1) + 1;
+    const images = getMemoryImages({
+      title: input.title,
+      imageUrl: input.imageUrl,
+      imageAlt: input.imageAlt,
+      images: input.images,
+    });
+    const cover = images[0] ?? { url: input.imageUrl, alt: input.imageAlt };
+
+    let { data, error } = await this.client
+      .from('memories')
+      .insert({
+        memory_date: input.memoryDate,
+        title: input.title,
+        story: input.story,
+        image_url: cover.url,
+        image_alt: cover.alt,
+        images,
+        sort_order: nextSortOrder,
+      })
+      .select('*')
+      .single<DbMemoryRow>();
+
+    if (isMissingImagesColumnError(error)) {
+      if (images.length > 1) {
+        throw new Error(
+          'Bảng memories trên Supabase chưa có cột images cho album nhiều ảnh. Vui lòng chạy lại tệp supabase/schema.sql trong SQL Editor.'
+        );
+      }
+      ({ data, error } = await this.client
+        .from('memories')
+        .insert({
+          memory_date: input.memoryDate,
+          title: input.title,
+          story: input.story,
+          image_url: cover.url,
+          image_alt: cover.alt,
+          sort_order: nextSortOrder,
+        })
+        .select('*')
+        .single<DbMemoryRow>());
+    }
+
+    if (error || !data) {
+      throw new Error(`Không thể thêm kỷ niệm mới: ${error?.message}`);
+    }
+
+    return mapMemoryRow(data);
+  }
+
+  private async findMemoryRecord(id: string): Promise<MemoryItem | null> {
+    return this.getMemoryById(id);
+  }
+
+  async updateMemory(id: string, input: MemoryMutationInput): Promise<MemoryItem | null> {
+    const existing = await this.findMemoryRecord(id);
     if (!existing) return null;
 
-    const { data, error } = await this.client
+    const previousUrls = new Set<string>(
+      [existing.imageUrl, ...getMemoryImages(existing).map((img) => img.url)].filter(Boolean)
+    );
+    const images = getMemoryImages({
+      title: input.title,
+      imageUrl: input.imageUrl,
+      imageAlt: input.imageAlt,
+      images: input.images,
+    });
+    const cover = images[0] ?? { url: input.imageUrl, alt: input.imageAlt };
+
+    let { data, error } = await this.client
       .from('memories')
       .update({
         memory_date: input.memoryDate,
         title: input.title,
         story: input.story,
-        image_url: input.imageUrl,
-        image_alt: input.imageAlt,
+        image_url: cover.url,
+        image_alt: cover.alt,
+        images,
       })
       .eq('id', id)
       .select('*')
       .single<DbMemoryRow>();
 
+    if (isMissingImagesColumnError(error)) {
+      if (images.length > 1) {
+        throw new Error(
+          'Bảng memories trên Supabase chưa có cột images cho album nhiều ảnh. Vui lòng chạy lại tệp supabase/schema.sql trong SQL Editor.'
+        );
+      }
+      ({ data, error } = await this.client
+        .from('memories')
+        .update({
+          memory_date: input.memoryDate,
+          title: input.title,
+          story: input.story,
+          image_url: cover.url,
+          image_alt: cover.alt,
+        })
+        .eq('id', id)
+        .select('*')
+        .single<DbMemoryRow>());
+    }
+
     if (error || !data) {
       throw new Error(`Không thể cập nhật kỷ niệm: ${error?.message}`);
     }
 
-    if (existing.image_url && existing.image_url !== input.imageUrl) {
-      await this.deleteStoredFileByUrl(existing.image_url);
+    for (const oldUrl of previousUrls) {
+      if (!(await this.isMediaUrlReferenced(oldUrl))) {
+        await this.deleteStoredFileByUrl(oldUrl);
+      }
     }
 
     return mapMemoryRow(data);
   }
 
   async deleteMemory(id: string): Promise<boolean> {
-    const existing = await this.findMemoryImageUrl(id);
+    const existing = await this.findMemoryRecord(id);
     if (!existing) return false;
+
+    const previousUrls = new Set<string>(
+      [existing.imageUrl, ...getMemoryImages(existing).map((img) => img.url)].filter(Boolean)
+    );
 
     const { error } = await this.client.from('memories').delete().eq('id', id);
     if (error) {
       throw new Error(`Không thể xoá kỷ niệm: ${error.message}`);
     }
 
-    await this.deleteStoredFileByUrl(existing.image_url);
+    for (const oldUrl of previousUrls) {
+      if (!(await this.isMediaUrlReferenced(oldUrl))) {
+        await this.deleteStoredFileByUrl(oldUrl);
+      }
+    }
     return true;
+  }
+
+  async listDiaryEntries(): Promise<DiaryEntry[]> {
+    const { data, error } = await this.client
+      .from('diary_entries')
+      .select('*')
+      .order('entry_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .returns<DbDiaryEntryRow[]>();
+
+    if (error) {
+      if (isMissingDiaryTableError(error)) {
+        return [];
+      }
+      throw new Error(`Lỗi truy vấn Supabase diary_entries: ${error.message}`);
+    }
+
+    return sortDiaryEntries((data || []).map(mapDiaryRow));
+  }
+
+  async getDiaryEntryById(id: string): Promise<DiaryEntry | null> {
+    if (!id || !UUID_REGEX.test(id)) return null;
+    const { data, error } = await this.client
+      .from('diary_entries')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle<DbDiaryEntryRow>();
+
+    if (error) {
+      if (error.code === 'PGRST116' || error.code === '22P02' || isMissingDiaryTableError(error)) {
+        return null;
+      }
+      throw new Error(`Lỗi truy vấn nhật ký Supabase: ${error.message}`);
+    }
+
+    return data ? mapDiaryRow(data) : null;
+  }
+
+  async createDiaryEntry(input: CreateDiaryEntryInput): Promise<DiaryEntry> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.client
+      .from('diary_entries')
+      .insert({
+        entry_date: input.entryDate,
+        title: input.title,
+        content: input.content,
+        mood: input.mood,
+        image_url: input.imageUrl,
+        image_alt: input.imageAlt,
+        author_id: input.authorId,
+        author_username: input.authorUsername,
+        author_display_name: input.authorDisplayName,
+        author_role: input.authorRole,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('*')
+      .single<DbDiaryEntryRow>();
+
+    if (error || !data) {
+      if (isMissingDiaryTableError(error)) {
+        throw new Error(
+          'Chưa khởi tạo bảng diary_entries trên Supabase. Vui lòng chạy lại tệp supabase/schema.sql trong SQL Editor.'
+        );
+      }
+      throw new Error(`Không thể lưu trang nhật ký mới: ${error?.message}`);
+    }
+
+    return mapDiaryRow(data);
+  }
+
+  async updateDiaryEntry(
+    id: string,
+    input: ValidatedDiaryEntryPayload
+  ): Promise<DiaryEntry | null> {
+    const existing = await this.getDiaryEntryById(id);
+    if (!existing) return null;
+
+    const { data, error } = await this.client
+      .from('diary_entries')
+      .update({
+        entry_date: input.entryDate,
+        title: input.title,
+        content: input.content,
+        mood: input.mood,
+        image_url: input.imageUrl,
+        image_alt: input.imageAlt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single<DbDiaryEntryRow>();
+
+    if (error || !data) {
+      if (isMissingDiaryTableError(error)) {
+        throw new Error(
+          'Chưa khởi tạo bảng diary_entries trên Supabase. Vui lòng chạy lại tệp supabase/schema.sql trong SQL Editor.'
+        );
+      }
+      throw new Error(`Không thể cập nhật trang nhật ký: ${error?.message}`);
+    }
+
+    if (
+      existing.imageUrl &&
+      existing.imageUrl !== input.imageUrl &&
+      !(await this.isMediaUrlReferenced(existing.imageUrl))
+    ) {
+      await this.deleteStoredFileByUrl(existing.imageUrl);
+    }
+
+    return mapDiaryRow(data);
+  }
+
+  async deleteDiaryEntry(id: string): Promise<boolean> {
+    const existing = await this.getDiaryEntryById(id);
+    if (!existing) return false;
+
+    const { error } = await this.client.from('diary_entries').delete().eq('id', id);
+    if (error) {
+      if (isMissingDiaryTableError(error)) {
+        throw new Error(
+          'Chưa khởi tạo bảng diary_entries trên Supabase. Vui lòng chạy lại tệp supabase/schema.sql trong SQL Editor.'
+        );
+      }
+      throw new Error(`Không thể xoá trang nhật ký: ${error.message}`);
+    }
+
+    if (existing.imageUrl && !(await this.isMediaUrlReferenced(existing.imageUrl))) {
+      await this.deleteStoredFileByUrl(existing.imageUrl);
+    }
+    return true;
+  }
+
+  async isMediaUrlReferenced(url: string): Promise<boolean> {
+    const trimmed = url.trim();
+    if (!trimmed) return false;
+
+    const [{ data: settingsRow }, { data: memRows }, { data: diaryRows, error: diaryErr }] =
+      await Promise.all([
+        this.client.from('site_settings').select('*').eq('id', 1).maybeSingle<DbSettingsRow>(),
+        this.client
+          .from('memories')
+          .select('*')
+          .returns<Pick<DbMemoryRow, 'image_url' | 'images'>[]>(),
+        this.client
+          .from('diary_entries')
+          .select('*')
+          .eq('image_url', trimmed)
+          .limit(1)
+          .returns<DbDiaryEntryRow[]>(),
+      ]);
+
+    if (settingsRow?.music_url === trimmed) return true;
+    if (
+      Array.isArray(memRows) &&
+      memRows.some(
+        (row) =>
+          row.image_url === trimmed ||
+          (Array.isArray(row.images) && row.images.some((img) => img?.url === trimmed))
+      )
+    ) {
+      return true;
+    }
+    if (!diaryErr && Array.isArray(diaryRows) && diaryRows.length > 0) return true;
+    return false;
   }
 
   async reorderMemories(ids: string[]): Promise<MemoryItem[]> {

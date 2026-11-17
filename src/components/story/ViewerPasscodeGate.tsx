@@ -324,16 +324,16 @@ export function ViewerPasscodeGate({
   const otpValue = otpDigits.join('');
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-x-hidden bg-[#080306] px-4 py-10 sm:py-14">
+    <main className="godly-velvet-bg relative flex min-h-[100dvh] items-center justify-center overflow-x-hidden bg-[#FFFBEB] px-4 py-10 sm:py-14">
       <LoveEffectsLayer />
 
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-red-600/20 blur-3xl"
+        className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-amber-200/45 blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-rose-500/20 blur-3xl"
+        className="pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-red-200/35 blur-3xl"
       />
 
       <div className="relative z-10 w-full max-w-md">
@@ -346,7 +346,7 @@ export function ViewerPasscodeGate({
           />
         ) : (
           <div className="glass-card relative w-full rounded-3xl p-5 text-center sm:p-8">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-950/60 text-rose-400 shadow-[0_0_24px_rgba(225,29,72,0.22)]">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-200 bg-red-50 text-red-600 shadow-[0_0_20px_rgba(220,38,38,0.14)]">
               {step === 'credentials' ? (
                 <Lock className="h-5 w-5" />
               ) : (
@@ -354,18 +354,18 @@ export function ViewerPasscodeGate({
               )}
             </div>
 
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-950/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-rose-200">
-              <Sparkles className="h-3 w-3 text-rose-400" />
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-950">
+              <Sparkles className="h-3 w-3 text-red-600" />
               <span>{step === 'credentials' ? 'Bước 1 / 2 · Chìa khoá thương yêu' : 'Bước 2 / 2 · Mật mã trái tim'}</span>
             </div>
 
-            <h1 className="break-words [overflow-wrap:anywhere] font-serif text-2xl font-bold tracking-tight text-rose-50 sm:text-3xl">
+            <h1 className="break-words [overflow-wrap:anywhere] font-serif text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
               {coupleTitle}
             </h1>
 
             {step === 'credentials' ? (
               <>
-                <p className="mt-2 text-sm leading-relaxed text-rose-200/80">
+                <p className="mt-2 text-sm leading-relaxed text-stone-700">
                   Khu vườn nhỏ chỉ mở cửa cho hai trái tim chung nhịp — cho anh biết tên và mật mã
                   yêu thương của tụi mình nhé.
                 </p>
@@ -374,7 +374,7 @@ export function ViewerPasscodeGate({
                   <div>
                     <label
                       htmlFor="viewer-username"
-                      className="mb-1.5 block text-xs font-semibold text-rose-200/90"
+                      className="mb-1.5 block text-xs font-semibold text-stone-800"
                     >
                       Tài khoản của mình
                     </label>
@@ -389,14 +389,14 @@ export function ViewerPasscodeGate({
                       autoComplete="username"
                       placeholder="Ví dụ: nguoithuong"
                       required
-                      className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-4 py-3 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
+                      className="w-full rounded-2xl border border-amber-300/80 bg-[#FFFDF5] px-4 py-3 text-base text-stone-900 placeholder:text-stone-500 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20 sm:text-sm"
                     />
                   </div>
 
                   <div>
                     <label
                       htmlFor="viewer-password"
-                      className="mb-1.5 block text-xs font-semibold text-rose-200/90"
+                      className="mb-1.5 block text-xs font-semibold text-stone-800"
                     >
                       Mật khẩu yêu thương
                     </label>
@@ -411,13 +411,13 @@ export function ViewerPasscodeGate({
                       autoComplete="current-password"
                       placeholder="Nhập mật khẩu bí mật..."
                       required
-                      className="w-full rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 px-4 py-3 text-base text-rose-50 placeholder:text-rose-300/70 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-500/25 sm:text-sm"
+                      className="w-full rounded-2xl border border-amber-300/80 bg-[#FFFDF5] px-4 py-3 text-base text-stone-900 placeholder:text-stone-500 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20 sm:text-sm"
                     />
                   </div>
 
                   {process.env.NODE_ENV !== 'production' && showDevDefaultHints && (
-                    <div className="rounded-2xl border border-rose-500/25 bg-rose-950/40 p-3 text-xs text-rose-200">
-                      <p className="mb-2 font-semibold text-rose-200">
+                    <div className="rounded-2xl border border-amber-300/80 bg-amber-100/75 p-3 text-xs text-stone-800">
+                      <p className="mb-2 font-semibold text-amber-950">
                         Gợi ý nhanh (Môi trường dev):
                       </p>
                       <div className="flex flex-wrap gap-1.5">
@@ -428,7 +428,7 @@ export function ViewerPasscodeGate({
                             setPassword('love2026');
                             setError('');
                           }}
-                          className="inline-flex min-h-[36px] items-center rounded-full border border-rose-400/35 bg-[#190911] px-2.5 py-1.5 text-[11px] font-medium text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-950/80"
+                          className="inline-flex min-h-[36px] items-center rounded-full border border-amber-300 bg-[#FFFDF5] px-2.5 py-1.5 text-[11px] font-medium text-stone-900 transition hover:border-red-300 hover:bg-amber-50"
                         >
                           nguoithuong · love2026 · OTP 121024
                         </button>
@@ -439,7 +439,7 @@ export function ViewerPasscodeGate({
                             setPassword('love2026');
                             setError('');
                           }}
-                          className="inline-flex min-h-[36px] items-center rounded-full border border-red-400/35 bg-[#190911] px-2.5 py-1.5 text-[11px] font-medium text-red-200 transition hover:border-red-400/60 hover:bg-red-950/80"
+                          className="inline-flex min-h-[36px] items-center rounded-full border border-red-300 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-900 transition hover:border-red-400 hover:bg-red-100"
                         >
                           admin · love2026 · OTP 140226
                         </button>
@@ -448,7 +448,7 @@ export function ViewerPasscodeGate({
                   )}
 
                   {error && (
-                    <p role="alert" className="text-center text-sm font-medium text-red-400">
+                    <p role="alert" className="text-center text-sm font-medium text-red-700">
                       {error}
                     </p>
                   )}
@@ -456,25 +456,25 @@ export function ViewerPasscodeGate({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(225,29,72,0.34)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 disabled:opacity-60 motion-reduce:transform-none motion-reduce:transition-none"
+                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(220,38,38,0.25)] transition hover:shadow-[0_14px_34px_rgba(220,38,38,0.38)] hover:ring-1 hover:ring-red-300 disabled:opacity-60 motion-reduce:transform-none motion-reduce:transition-none"
                   >
-                    <Heart className="h-4 w-4 fill-white" />
+                    <Heart className="h-4 w-4 fill-white text-white" />
                     <span>{loading ? 'Đang gõ cửa trái tim...' : 'Tiếp tục đến bước OTP'}</span>
                   </button>
                 </form>
               </>
             ) : (
               <>
-                <p className="mt-2 text-sm leading-relaxed text-rose-200/80">
+                <p className="mt-2 text-sm leading-relaxed text-stone-700">
                   Thương chào{' '}
-                  <span className="font-semibold text-rose-400">
+                  <span className="font-semibold text-red-700">
                     {displayName || username}
                   </span>
                   , nhập 6 chữ số kỷ niệm để cánh cửa trái tim mở ra nhé.
                 </p>
 
                 {otpHint && (
-                  <div className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-2xl border border-rose-400/30 bg-rose-950/55 px-3.5 py-1.5 text-xs font-medium text-rose-200">
+                  <div className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-2xl border border-amber-300/80 bg-amber-100/80 px-3.5 py-1.5 text-xs font-medium text-amber-950">
                     <span className="break-words [overflow-wrap:anywhere]">Gợi ý OTP: {otpHint}</span>
                   </div>
                 )}
@@ -497,13 +497,13 @@ export function ViewerPasscodeGate({
                         onChange={(e) => handleOtpChange(index, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(index, e)}
                         onPaste={(e) => handleOtpPaste(index, e)}
-                        className="h-11 w-10 rounded-xl border border-rose-400/50 bg-[#0d0408]/90 text-center text-lg font-bold text-rose-50 shadow-[inset_0_1px_0_rgba(255,228,230,0.06)] outline-none transition focus:border-rose-400 focus:shadow-[0_0_20px_rgba(225,29,72,0.35)] focus:ring-2 focus:ring-rose-500/30 sm:h-12 sm:w-11"
+                        className="h-11 w-10 rounded-xl border border-amber-400/80 bg-[#FFFDF5] text-center text-lg font-bold text-stone-900 shadow-sm outline-none transition focus:border-red-500 focus:shadow-[0_0_16px_rgba(220,38,38,0.2)] focus:ring-2 focus:ring-red-500/25 sm:h-12 sm:w-11"
                       />
                     ))}
                   </div>
 
                   {error && (
-                    <p role="alert" className="text-center text-sm font-medium text-red-400">
+                    <p role="alert" className="text-center text-sm font-medium text-red-700">
                       {error}
                     </p>
                   )}
@@ -512,9 +512,9 @@ export function ViewerPasscodeGate({
                     <button
                       type="submit"
                       disabled={loading || otpValue.length < 6}
-                      className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(225,29,72,0.34)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transform-none motion-reduce:transition-none"
+                      className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(220,38,38,0.25)] transition hover:shadow-[0_14px_34px_rgba(220,38,38,0.38)] hover:ring-1 hover:ring-red-300 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transform-none motion-reduce:transition-none"
                     >
-                      <Heart className="h-4 w-4 fill-white" />
+                      <Heart className="h-4 w-4 fill-white text-white" />
                       <span>
                         {loading ? 'Đang mở khoá trái tim...' : 'Xác nhận bước vào tim nhau'}
                       </span>
@@ -524,7 +524,7 @@ export function ViewerPasscodeGate({
                       type="button"
                       disabled={loading}
                       onClick={handleBackToStep1}
-                      className="inline-flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-2xl border border-rose-500/25 bg-[#14060c]/85 px-4 py-2.5 text-xs font-semibold text-rose-200 transition hover:border-rose-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transform-none motion-reduce:transition-none"
+                      className="inline-flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-2xl border border-amber-300/80 bg-amber-100/75 px-4 py-2.5 text-xs font-semibold text-stone-800 transition hover:border-amber-400 hover:bg-amber-200/80 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transform-none motion-reduce:transition-none"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
                       <span>Quay lại bước 1</span>
@@ -534,10 +534,10 @@ export function ViewerPasscodeGate({
               </>
             )}
 
-            <div className="mt-6 border-t border-rose-500/15 pt-4 text-center">
+            <div className="mt-6 border-t border-amber-200/80 pt-4 text-center">
               <Link
                 href="/admin/login"
-                className="inline-flex min-h-[36px] items-center px-2 py-1.5 text-xs font-medium text-rose-300/75 transition hover:text-rose-200"
+                className="inline-flex min-h-[36px] items-center px-2 py-1.5 text-xs font-medium text-stone-600 transition hover:text-stone-950"
               >
                 Góc nhỏ của chủ vườn ký ức · Quản trị
               </Link>

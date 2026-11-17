@@ -21,9 +21,23 @@ import {
   PATCH as adminUserPatch,
 } from '@/app/api/admin/users/[id]/route';
 import { GET as adminUsersGet, POST as adminUsersPost } from '@/app/api/admin/users/route';
+import {
+  DELETE as diaryDelete,
+  PUT as diaryPut,
+} from '@/app/api/diary/[id]/route';
+import { GET as diaryGet, POST as diaryPost } from '@/app/api/diary/route';
+import { POST as diaryUploadUrlPost } from '@/app/api/diary/upload-url/route';
+import {
+  DELETE as diaryUploadDelete,
+  POST as diaryUploadPost,
+} from '@/app/api/diary/upload/route';
 import { POST as viewerLoginPost } from '@/app/api/viewer/login/route';
 import { POST as viewerLogoutPost } from '@/app/api/viewer/logout/route';
 import { POST as viewerVerifyOtpPost } from '@/app/api/viewer/verify-otp/route';
+import {
+  GET as uploadedFileGet,
+  HEAD as uploadedFileHead,
+} from '@/app/uploads/[filename]/route';
 import {
   ADMIN_COOKIE_NAME,
   GUEST_COOLDOWN_COOKIE_NAME,
@@ -1215,5 +1229,458 @@ describe('API route handlers', () => {
     );
     expect(cleanupRes.status).toBe(200);
     expect(fs.existsSync(orphanFile)).toBe(false);
+  });
+
+  test('diary CRUD & member image upload routes support unlocked viewer + admin, enforce ownership, protect referenced files, and record activity', async () => {
+    // Locked by default -> unauthenticated GET /api/diary returns 401
+    const unauthGet = await diaryGet(new Request('http://localhost/api/diary'));
+    expect(unauthGet.status).toBe(401);
+
+    // Viewer completes Step 1 only -> still rejected with 401 on diary write & upload-url
+    const step1Res = await viewerLoginPost(
+      new Request('http://localhost/api/viewer/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'nguoithuong', password: 'love2026' }),
+      })
+    );
+    const step1Cookie = `${VIEWER_STEP1_COOKIE_NAME}=${step1Res.cookies.get(VIEWER_STEP1_COOKIE_NAME)!.value}`;
+
+    const step1Write = await diaryPost(
+      new Request('http://localhost/api/diary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: step1Cookie },
+        body: JSON.stringify({ entryDate: '2026-11-17', content: 'Chưa nhập OTP' }),
+      })
+    );
+    expect(step1Write.status).toBe(401);
+
+    const step1UploadUrl = await diaryUploadUrlPost(
+      new Request('http://localhost/api/diary/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: step1Cookie },
+        body: JSON.stringify({
+          kind: 'image',
+          mimeType: 'image/jpeg',
+          size: 1024,
+          fileName: 'day.jpg',
+        }),
+      })
+    );
+    expect(step1UploadUrl.status).toBe(401);
+
+    // Complete Step 2 OTP -> unlocked viewer cookie
+    const otpRes = await viewerVerifyOtpPost(
+      new Request('http://localhost/api/viewer/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: step1Cookie },
+        body: JSON.stringify({ otp: '121024' }),
+      })
+    );
+    const viewerCookie = `${VIEWER_UNLOCKED_COOKIE_NAME}=${otpRes.cookies.get(VIEWER_UNLOCKED_COOKIE_NAME)!.value}`;
+
+    // Member upload-url rejects audio uploads (image-only!)
+    const audioAttempt = await diaryUploadUrlPost(
+      new Request('http://localhost/api/diary/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: viewerCookie },
+        body: JSON.stringify({
+          kind: 'audio',
+          mimeType: 'audio/mpeg',
+          size: 2048,
+          fileName: 'song.mp3',
+        }),
+      })
+    );
+    expect(audioAttempt.status).toBe(400);
+
+    // Member upload-url & upload accept valid image from unlocked viewer
+    const prepImgRes = await diaryUploadUrlPost(
+      new Request('http://localhost/api/diary/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: viewerCookie },
+        body: JSON.stringify({
+          kind: 'image',
+          mimeType: 'image/jpeg',
+          size: 1024,
+          fileName: 'coffee-date.jpg',
+        }),
+      })
+    );
+    expect(prepImgRes.status).toBe(200);
+    expect(await prepImgRes.json()).toEqual({
+      mode: 'local',
+      uploadEndpoint: '/api/diary/upload',
+    });
+
+    const viewerForm = new FormData();
+    viewerForm.append('kind', 'image');
+    viewerForm.append(
+      'file',
+      new File([new Uint8Array([10, 20, 30, 40])], 'coffee-date.jpg', { type: 'image/jpeg' })
+    );
+    const viewerUploadRes = await diaryUploadPost(
+      new Request('http://localhost/api/diary/upload', {
+        method: 'POST',
+        headers: { cookie: viewerCookie },
+        body: viewerForm,
+      })
+    );
+    expect(viewerUploadRes.status).toBe(200);
+    const { publicUrl: viewerPhotoUrl } = (await viewerUploadRes.json()) as { publicUrl: string };
+    expect(viewerPhotoUrl).toMatch(/^\/uploads\/.+coffee-date\.jpg$/);
+
+    // Viewer creates diary entry (spoofed authorRole in body is ignored in favor of server session)
+    const createViewerDiaryRes = await diaryPost(
+      new Request('http://localhost/api/diary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: viewerCookie },
+        body: JSON.stringify({
+          entryDate: '2026-11-17',
+          title: 'Buổi sáng của Em',
+          content: 'Sáng nay trời mát dịu, nhớ anh nhiều.',
+          mood: 'miss_you',
+          imageUrl: viewerPhotoUrl,
+          authorRole: 'admin',
+          authorUsername: 'spoofed',
+        }),
+      })
+    );
+    expect(createViewerDiaryRes.status).toBe(201);
+    const viewerEntry = (await createViewerDiaryRes.json()).entry;
+    expect(viewerEntry.authorUsername).toBe('nguoithuong');
+    expect(viewerEntry.authorRole).toBe('viewer');
+    expect(viewerEntry.imageUrl).toBe(viewerPhotoUrl);
+
+    // DELETE /api/diary/upload MUST refuse to delete a referenced photo (403)
+    const deleteReferencedAttempt = await diaryUploadDelete(
+      new Request('http://localhost/api/diary/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', cookie: viewerCookie },
+        body: JSON.stringify({ url: viewerPhotoUrl }),
+      })
+    );
+    expect(deleteReferencedAttempt.status).toBe(403);
+    expect(
+      fs.existsSync(path.join(process.env.LOCAL_UPLOAD_DIR!, path.basename(viewerPhotoUrl)))
+    ).toBe(true);
+
+    // Unreferenced orphan diary upload CAN be cleaned up via DELETE /api/diary/upload (200)
+    const orphanDiaryForm = new FormData();
+    orphanDiaryForm.append('kind', 'image');
+    orphanDiaryForm.append(
+      'file',
+      new File([new Uint8Array([5, 6, 7])], 'unsaved.png', { type: 'image/png' })
+    );
+    const orphanDiaryUp = await diaryUploadPost(
+      new Request('http://localhost/api/diary/upload', {
+        method: 'POST',
+        headers: { cookie: viewerCookie },
+        body: orphanDiaryForm,
+      })
+    );
+    const { publicUrl: unsavedUrl } = (await orphanDiaryUp.json()) as { publicUrl: string };
+    const cleanUnsaved = await diaryUploadDelete(
+      new Request('http://localhost/api/diary/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', cookie: viewerCookie },
+        body: JSON.stringify({ url: unsavedUrl }),
+      })
+    );
+    expect(cleanUnsaved.status).toBe(200);
+    expect(
+      fs.existsSync(path.join(process.env.LOCAL_UPLOAD_DIR!, path.basename(unsavedUrl)))
+    ).toBe(false);
+
+    // Admin creates own text-only diary entry on the same day using ny_admin_session cookie
+    const { cookieHeader: adminCookie } = await loginAsAdmin();
+    const createAdminDiaryRes = await diaryPost(
+      new Request('http://localhost/api/diary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: adminCookie },
+        body: JSON.stringify({
+          entryDate: '2026-11-17',
+          title: 'Buổi tối của Anh',
+          content: 'Tan làm chỉ muốn chạy về ôm em.',
+          mood: 'loved',
+        }),
+      })
+    );
+    expect(createAdminDiaryRes.status).toBe(201);
+    const adminEntry = (await createAdminDiaryRes.json()).entry;
+    expect(adminEntry.authorRole).toBe('admin');
+
+    // Viewer CANNOT edit or delete admin's entry -> 403
+    const viewerEditAdmin = await diaryPut(
+      new Request(`http://localhost/api/diary/${adminEntry.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', cookie: viewerCookie },
+        body: JSON.stringify({
+          entryDate: '2026-11-17',
+          content: 'Em sửa bài anh thử xem',
+          mood: 'happy',
+        }),
+      }),
+      { params: Promise.resolve({ id: adminEntry.id }) }
+    );
+    expect(viewerEditAdmin.status).toBe(403);
+
+    const viewerDelAdmin = await diaryDelete(
+      new Request(`http://localhost/api/diary/${adminEntry.id}`, {
+        method: 'DELETE',
+        headers: { cookie: viewerCookie },
+      }),
+      { params: Promise.resolve({ id: adminEntry.id }) }
+    );
+    expect(viewerDelAdmin.status).toBe(403);
+
+    // Viewer CAN edit her own entry -> 200
+    const viewerEditOwn = await diaryPut(
+      new Request(`http://localhost/api/diary/${viewerEntry.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', cookie: viewerCookie },
+        body: JSON.stringify({
+          entryDate: '2026-11-17',
+          title: 'Buổi sáng của Em (cập nhật)',
+          content: 'Đã uống trà sữa anh mua.',
+          mood: 'grateful',
+          imageUrl: viewerPhotoUrl,
+        }),
+      }),
+      { params: Promise.resolve({ id: viewerEntry.id }) }
+    );
+    expect(viewerEditOwn.status).toBe(200);
+    expect((await viewerEditOwn.json()).entry.mood).toBe('grateful');
+
+    // Admin CAN edit viewer's entry while preserving original author attribution, and delete entries
+    const adminEditViewer = await diaryPut(
+      new Request(`http://localhost/api/diary/${viewerEntry.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', cookie: adminCookie },
+        body: JSON.stringify({
+          entryDate: '2026-11-17',
+          title: 'Buổi sáng của Em (anh sửa chính tả)',
+          content: 'Đã uống trà sữa ít đường anh mua.',
+          mood: 'grateful',
+          imageUrl: viewerPhotoUrl,
+        }),
+      }),
+      { params: Promise.resolve({ id: viewerEntry.id }) }
+    );
+    expect(adminEditViewer.status).toBe(200);
+    const editedByAdmin = (await adminEditViewer.json()).entry;
+    expect(editedByAdmin.authorUsername).toBe('nguoithuong');
+    expect(editedByAdmin.authorRole).toBe('viewer');
+
+    const adminDelOwn = await diaryDelete(
+      new Request(`http://localhost/api/diary/${adminEntry.id}`, {
+        method: 'DELETE',
+        headers: { cookie: adminCookie },
+      }),
+      { params: Promise.resolve({ id: adminEntry.id }) }
+    );
+    expect(adminDelOwn.status).toBe(200);
+
+    // Activity logs captured diary_saved and diary_deleted
+    const savedLogsRes = await adminActivityGet(
+      new Request('http://localhost/api/admin/activity?eventType=diary_saved', {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect((await savedLogsRes.json()).logs.length).toBeGreaterThanOrEqual(4);
+
+    const deletedLogsRes = await adminActivityGet(
+      new Request('http://localhost/api/admin/activity?eventType=diary_deleted', {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect((await deletedLogsRes.json()).logs).toHaveLength(1);
+  });
+
+  test('dynamic /uploads/[filename] route streams runtime-uploaded images & Range audio for self-hosted servers and blocks traversal or unsafe extensions', async () => {
+    const repo = new LocalStorageRepository();
+    const imgBytes = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x01, 0x02, 0x03, 0x04]);
+    const savedImg = await repo.saveLocalUpload({
+      fileName: 'self-hosted-diary.webp',
+      buffer: imgBytes,
+    });
+    const imgFileName = path.basename(savedImg.publicUrl);
+
+    const audioBytes = Buffer.from('0123456789', 'utf8');
+    const savedAudio = await repo.saveLocalUpload({
+      fileName: 'melody.mp3',
+      buffer: audioBytes,
+    });
+    const audioFileName = path.basename(savedAudio.publicUrl);
+
+    // Full GET image -> 200 with immutable cache & nosniff
+    const imgRes = await uploadedFileGet(
+      new Request(`http://localhost/uploads/${imgFileName}`),
+      { params: Promise.resolve({ filename: imgFileName }) }
+    );
+    expect(imgRes.status).toBe(200);
+    expect(imgRes.headers.get('content-type')).toBe('image/webp');
+    expect(imgRes.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(imgRes.headers.get('cache-control')).toContain('immutable');
+    expect(Buffer.from(await imgRes.arrayBuffer())).toEqual(imgBytes);
+
+    // HEAD image -> 200 with content-length and empty body
+    const headRes = await uploadedFileHead(
+      new Request(`http://localhost/uploads/${imgFileName}`, { method: 'HEAD' }),
+      { params: Promise.resolve({ filename: imgFileName }) }
+    );
+    expect(headRes.status).toBe(200);
+    expect(headRes.headers.get('content-length')).toBe(String(imgBytes.length));
+    expect((await headRes.arrayBuffer()).byteLength).toBe(0);
+
+    // Byte-Range GET audio -> 206 Partial Content
+    const rangeRes = await uploadedFileGet(
+      new Request(`http://localhost/uploads/${audioFileName}`, {
+        headers: { Range: 'bytes=2-5' },
+      }),
+      { params: Promise.resolve({ filename: audioFileName }) }
+    );
+    expect(rangeRes.status).toBe(206);
+    expect(rangeRes.headers.get('content-range')).toBe('bytes 2-5/10');
+    expect(rangeRes.headers.get('accept-ranges')).toBe('bytes');
+    expect(Buffer.from(await rangeRes.arrayBuffer()).toString('utf8')).toBe('2345');
+
+    // Reject path traversal, hidden dotfiles, forbidden SVG/HTML, and missing files
+    fs.writeFileSync(path.join(process.env.LOCAL_UPLOAD_DIR!, 'xss.svg'), '<svg></svg>');
+    for (const bad of ['../local-db.json', '.gitkeep', 'xss.svg']) {
+      const badRes = await uploadedFileGet(
+        new Request(`http://localhost/uploads/${encodeURIComponent(bad)}`),
+        { params: Promise.resolve({ filename: bad }) }
+      );
+      expect(badRes.status).toBe(400);
+    }
+
+    const missingRes = await uploadedFileGet(
+      new Request('http://localhost/uploads/does-not-exist.jpg'),
+      { params: Promise.resolve({ filename: 'does-not-exist.jpg' }) }
+    );
+    expect(missingRes.status).toBe(404);
+  });
+
+  test('admin & diary video upload routes and /uploads/[filename] MP4/MOV Byte-Range & large-file streaming work while diary rejects audio', async () => {
+    const { cookieHeader: adminCookie } = await loginAsAdmin();
+
+    // Admin upload-url accepts video metadata up to 100MB (e.g., 25MB MP4)
+    const adminVidUrlRes = await uploadUrlPost(
+      new Request('http://localhost/api/admin/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: adminCookie },
+        body: JSON.stringify({
+          kind: 'video',
+          mimeType: 'video/mp4',
+          size: 25 * 1024 * 1024,
+          fileName: 'clip.mp4',
+        }),
+      })
+    );
+    expect(adminVidUrlRes.status).toBe(200);
+    expect(await adminVidUrlRes.json()).toEqual({
+      mode: 'local',
+      uploadEndpoint: '/api/admin/upload',
+    });
+
+    // Admin upload saves real MP4 bytes
+    const vidForm = new FormData();
+    vidForm.append('kind', 'video');
+    vidForm.append(
+      'file',
+      new File([Buffer.from('MP4HEADERBODY')], 'clip.mp4', { type: 'video/mp4' })
+    );
+    const adminVidUpRes = await uploadPost(
+      new Request('http://localhost/api/admin/upload', {
+        method: 'POST',
+        headers: { cookie: adminCookie },
+        body: vidForm,
+      })
+    );
+    expect(adminVidUpRes.status).toBe(200);
+    const { publicUrl: mp4Url } = (await adminVidUpRes.json()) as { publicUrl: string };
+    expect(mp4Url).toMatch(/^\/uploads\/.*clip\.mp4$/);
+
+    // Diary upload-url & upload accept video/quicktime .mov while still rejecting audio
+    const diaryAudioReject = await diaryUploadUrlPost(
+      new Request('http://localhost/api/diary/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: adminCookie },
+        body: JSON.stringify({
+          kind: 'audio',
+          mimeType: 'audio/mpeg',
+          size: 1024,
+          fileName: 'song.mp3',
+        }),
+      })
+    );
+    expect(diaryAudioReject.status).toBe(400);
+
+    const diaryVidUrlRes = await diaryUploadUrlPost(
+      new Request('http://localhost/api/diary/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: adminCookie },
+        body: JSON.stringify({
+          kind: 'video',
+          mimeType: 'video/quicktime',
+          size: 12 * 1024 * 1024,
+          fileName: 'daily.mov',
+        }),
+      })
+    );
+    expect(diaryVidUrlRes.status).toBe(200);
+
+    const diaryVidForm = new FormData();
+    diaryVidForm.append('kind', 'video');
+    diaryVidForm.append(
+      'file',
+      new File([Buffer.from('MOVDATA')], 'daily.mov', { type: 'video/quicktime' })
+    );
+    const diaryVidUpRes = await diaryUploadPost(
+      new Request('http://localhost/api/diary/upload', {
+        method: 'POST',
+        headers: { cookie: adminCookie },
+        body: diaryVidForm,
+      })
+    );
+    expect(diaryVidUpRes.status).toBe(200);
+    const { publicUrl: movUrl } = (await diaryVidUpRes.json()) as { publicUrl: string };
+    expect(movUrl).toMatch(/^\/uploads\/.*daily\.mov$/);
+
+    // /uploads/[filename] serves MP4 headers and 206 Partial Content Range
+    const mp4FileName = path.basename(mp4Url);
+    const fullMp4Res = await uploadedFileGet(
+      new Request(`http://localhost/uploads/${mp4FileName}`),
+      { params: Promise.resolve({ filename: mp4FileName }) }
+    );
+    expect(fullMp4Res.status).toBe(200);
+    expect(fullMp4Res.headers.get('content-type')).toBe('video/mp4');
+    expect(fullMp4Res.headers.get('accept-ranges')).toBe('bytes');
+
+    const rangeMp4Res = await uploadedFileGet(
+      new Request(`http://localhost/uploads/${mp4FileName}`, {
+        headers: { Range: 'bytes=0-3' },
+      }),
+      { params: Promise.resolve({ filename: mp4FileName }) }
+    );
+    expect(rangeMp4Res.status).toBe(206);
+    expect(rangeMp4Res.headers.get('content-range')).toBe('bytes 0-3/13');
+    expect(Buffer.from(await rangeMp4Res.arrayBuffer()).toString('utf8')).toBe('MP4H');
+
+    // Large (>2MB) video uses streaming path accurately
+    const largeBuffer = Buffer.alloc(2 * 1024 * 1024 + 512, 0x41);
+    const repo = new LocalStorageRepository();
+    const savedLarge = await repo.saveLocalUpload({
+      fileName: 'large-moment.webm',
+      buffer: largeBuffer,
+    });
+    const largeRes = await uploadedFileGet(
+      new Request(`http://localhost/uploads/${path.basename(savedLarge.publicUrl)}`),
+      { params: Promise.resolve({ filename: path.basename(savedLarge.publicUrl) }) }
+    );
+    expect(largeRes.status).toBe(200);
+    expect(largeRes.headers.get('content-type')).toBe('video/webm');
+    expect((await largeRes.arrayBuffer()).byteLength).toBe(largeBuffer.length);
   });
 });

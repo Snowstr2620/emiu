@@ -22,14 +22,32 @@ import {
   type UserSessionTokenPayload,
 } from '@/lib/auth';
 import { buildInitialUsers } from '@/lib/seed-data';
+import {
+  getDroppedOrPastedFiles,
+  validateClientVisualMediaFile,
+  VISUAL_MEDIA_INVALID_TYPE_MESSAGE,
+} from '@/lib/client-dropzone';
+import {
+  formatAlbumMediaCountVi,
+  getMemoryImages,
+  isVideoFile,
+  isVideoMediaItem,
+  isVideoMediaUrl,
+  MAX_ALBUM_IMAGES,
+} from '@/lib/memory-album';
+import { requireMemberApiSession, resolveMemberSession } from '@/lib/member-guard';
 import { StorageRepository } from '@/lib/storage/types';
 import { AppUser } from '@/types/memories';
 import {
   MAX_AUDIO_BYTES,
   MAX_IMAGE_BYTES,
+  MAX_MEMORY_STORY_LENGTH,
+  MAX_VIDEO_BYTES,
   sanitizeStorageFileName,
   validateClientActivityPayload,
   validateCreateUserPayload,
+  validateDiaryEntryPayload,
+  validateMemoryPayload,
   validateOtpVerifyPayload,
   validateSettingsPayload,
   validateUpdateUserPayload,
@@ -946,5 +964,451 @@ describe('multi-account & activity payload validation', () => {
         process.env.ADMIN_DEFAULT_OTP = origOtp;
       }
     }
+  });
+});
+
+describe('diary entry validation & member session guard', () => {
+  test('validateDiaryEntryPayload accepts text-only and photo-attached entries, defaults mood to loved, and clears imageAlt when imageUrl is empty', () => {
+    const textOnly = validateDiaryEntryPayload({
+      entryDate: '2026-11-17',
+      title: '  Một ngày bình yên  ',
+      content: '  Hôm nay tụi mình cùng nấu bữa tối ấm áp.  ',
+      imageAlt: 'Không nên giữ lại khi chưa có ảnh',
+    });
+    expect(textOnly).toEqual({
+      data: {
+        entryDate: '2026-11-17',
+        title: 'Một ngày bình yên',
+        content: 'Hôm nay tụi mình cùng nấu bữa tối ấm áp.',
+        mood: 'loved',
+        imageUrl: '',
+        imageAlt: '',
+      },
+    });
+
+    const withImage = validateDiaryEntryPayload({
+      entryDate: '2026-11-17',
+      title: 'Đi dạo phố đêm',
+      content: 'Trời se lạnh nhưng nắm tay anh ấm lắm.',
+      mood: 'happy',
+      imageUrl: '/uploads/1731814000-abcd1234-night.webp',
+      imageAlt: '',
+    });
+    expect(withImage).toEqual({
+      data: {
+        entryDate: '2026-11-17',
+        title: 'Đi dạo phố đêm',
+        content: 'Trời se lạnh nhưng nắm tay anh ấm lắm.',
+        mood: 'happy',
+        imageUrl: '/uploads/1731814000-abcd1234-night.webp',
+        imageAlt: 'Đi dạo phố đêm',
+      },
+    });
+  });
+
+  test('validateDiaryEntryPayload rejects invalid dates, empty content, unknown moods, and unsafe imageUrl; client activity blocks diary_saved forgery', () => {
+    expect('error' in validateDiaryEntryPayload(null)).toBe(true);
+    expect('error' in validateDiaryEntryPayload([])).toBe(true);
+    expect(
+      'error' in
+        validateDiaryEntryPayload({
+          entryDate: '2026-02-30',
+          content: 'Ngày không tồn tại',
+        })
+    ).toBe(true);
+    expect(
+      'error' in
+        validateDiaryEntryPayload({
+          entryDate: '2026-11-17',
+          content: '   ',
+        })
+    ).toBe(true);
+    expect(
+      'error' in
+        validateDiaryEntryPayload({
+          entryDate: '2026-11-17',
+          content: 'Tâm trạng lạ',
+          mood: 'angry_unknown',
+        })
+    ).toBe(true);
+    expect(
+      'error' in
+        validateDiaryEntryPayload({
+          entryDate: '2026-11-17',
+          content: 'Đường dẫn ảnh xấu',
+          imageUrl: '/uploads/../secret.json',
+        })
+    ).toBe(true);
+
+    // Server-only diary events cannot be forged via /api/activity
+    expect(
+      'error' in
+        validateClientActivityPayload({
+          eventType: 'diary_saved',
+          detail: 'Giả mạo ghi nhật ký',
+        })
+    ).toBe(true);
+    expect(
+      'error' in
+        validateClientActivityPayload({
+          eventType: 'diary_deleted',
+          detail: 'Giả mạo xoá nhật ký',
+        })
+    ).toBe(true);
+  });
+
+  test('requireMemberApiSession accepts viewer_unlocked, falls back to admin cookie, and rejects viewer_step1 or stale cookies', async () => {
+    const adminUser: AppUser = {
+      id: 'admin-1',
+      username: 'admin',
+      displayName: 'Anh',
+      role: 'admin',
+      passwordHash: 's:h',
+      otpHash: 's:o',
+      otpHint: '',
+      isActive: true,
+      sessionVersion: 2,
+      lastLoginAt: null,
+      createdAt: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+    };
+    const viewerUser: AppUser = {
+      ...adminUser,
+      id: 'viewer-1',
+      username: 'nguoithuong',
+      displayName: 'Em bé',
+      role: 'viewer',
+      sessionVersion: 4,
+    };
+    const repo = {
+      getUserById: async (id: string) =>
+        [adminUser, viewerUser].find((u) => u.id === id) ?? null,
+    } as unknown as StorageRepository;
+
+    const viewerUnlockedToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'viewer_unlocked',
+        sub: viewerUser.id,
+        usr: viewerUser.username,
+        ver: viewerUser.sessionVersion,
+        role: 'viewer',
+        exp: 0,
+      },
+      3600
+    );
+    const adminSessionToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'admin',
+        sub: adminUser.id,
+        usr: adminUser.username,
+        ver: adminUser.sessionVersion,
+        role: 'admin',
+        exp: 0,
+      },
+      3600
+    );
+    const step1OnlyToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'viewer_step1',
+        sub: viewerUser.id,
+        usr: viewerUser.username,
+        ver: viewerUser.sessionVersion,
+        role: 'viewer',
+        exp: 0,
+      },
+      600
+    );
+    const staleViewerToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'viewer_unlocked',
+        sub: viewerUser.id,
+        usr: viewerUser.username,
+        ver: viewerUser.sessionVersion - 1,
+        role: 'viewer',
+        exp: 0,
+      },
+      3600
+    );
+
+    // 1. Unlocked viewer succeeds
+    const viewerReq = new Request('http://localhost/api/diary', {
+      headers: { cookie: `${VIEWER_UNLOCKED_COOKIE_NAME}=${viewerUnlockedToken}` },
+    });
+    const viewerAuth = await requireMemberApiSession(viewerReq, repo);
+    expect(viewerAuth.ok).toBe(true);
+    if (viewerAuth.ok) {
+      expect(viewerAuth.user.username).toBe('nguoithuong');
+      expect(viewerAuth.user.role).toBe('viewer');
+    }
+
+    // 2. Stale viewer cookie + valid admin cookie falls back cleanly to admin
+    const fallbackReq = new Request('http://localhost/api/diary', {
+      headers: {
+        cookie: `${VIEWER_UNLOCKED_COOKIE_NAME}=${staleViewerToken}; ${ADMIN_COOKIE_NAME}=${adminSessionToken}`,
+      },
+    });
+    const fallbackUser = await resolveMemberSession(fallbackReq, repo);
+    expect(fallbackUser?.username).toBe('admin');
+    const fallbackAuth = await requireMemberApiSession(fallbackReq, repo);
+    expect(fallbackAuth.ok).toBe(true);
+    if (fallbackAuth.ok) {
+      expect(fallbackAuth.user.role).toBe('admin');
+    }
+
+    // 3. Step-1-only cookie (OTP unverified) is strictly rejected with 401
+    const step1Req = new Request('http://localhost/api/diary', {
+      headers: { cookie: `${VIEWER_STEP1_COOKIE_NAME}=${step1OnlyToken}` },
+    });
+    const step1Auth = await requireMemberApiSession(step1Req, repo);
+    expect(step1Auth.ok).toBe(false);
+    if (!step1Auth.ok) {
+      expect(step1Auth.response.status).toBe(401);
+    }
+
+    // 4. Stale viewer + stale admin cookies return 401 and clear both stale cookies
+    const staleAdminToken = signSessionPayload<UserSessionTokenPayload>(
+      {
+        typ: 'admin',
+        sub: adminUser.id,
+        usr: adminUser.username,
+        ver: adminUser.sessionVersion - 1,
+        role: 'admin',
+        exp: 0,
+      },
+      3600
+    );
+    const staleReq = new Request('http://localhost/api/diary', {
+      headers: {
+        cookie: `${VIEWER_UNLOCKED_COOKIE_NAME}=${staleViewerToken}; ${ADMIN_COOKIE_NAME}=${staleAdminToken}`,
+      },
+    });
+    const staleAuth = await requireMemberApiSession(staleReq, repo);
+    expect(staleAuth.ok).toBe(false);
+    if (!staleAuth.ok) {
+      expect(staleAuth.response.status).toBe(401);
+      const setCookie = staleAuth.response.headers.get('set-cookie') ?? '';
+      expect(setCookie).toContain(`${VIEWER_UNLOCKED_COOKIE_NAME}=;`);
+      expect(setCookie).toContain(`${ADMIN_COOKIE_NAME}=;`);
+    }
+  });
+});
+
+describe('multi-photo memory album helpers & validation', () => {
+  test('validateMemoryPayload accepts 1..MAX_ALBUM_IMAGES photos, syncs cover imageUrl/imageAlt, normalizes legacy payload, and rejects empty or oversized albums', () => {
+    const multi = validateMemoryPayload({
+      memoryDate: '2026-04-05',
+      title: 'Đà Lạt cuối tuần',
+      story: 'Ba bức ảnh đầy nắng.',
+      images: [
+        { url: '/uploads/cover.jpg', alt: 'Ảnh bìa Đà Lạt' },
+        { url: '/uploads/pic-2.jpg', alt: '' },
+        { url: 'https://cdn.example.com/pic-3.webp', alt: 'Cà phê sáng' },
+      ],
+    });
+    expect(multi).toEqual({
+      data: {
+        memoryDate: '2026-04-05',
+        title: 'Đà Lạt cuối tuần',
+        story: 'Ba bức ảnh đầy nắng.',
+        imageUrl: '/uploads/cover.jpg',
+        imageAlt: 'Ảnh bìa Đà Lạt',
+        images: [
+          { url: '/uploads/cover.jpg', alt: 'Ảnh bìa Đà Lạt' },
+          { url: '/uploads/pic-2.jpg', alt: 'Đà Lạt cuối tuần' },
+          { url: 'https://cdn.example.com/pic-3.webp', alt: 'Cà phê sáng' },
+        ],
+      },
+    });
+
+    const legacy = validateMemoryPayload({
+      memoryDate: '2024-10-12',
+      title: 'Kỷ niệm cũ',
+      story: 'Một bức ảnh.',
+      imageUrl: '/samples/memory-1.svg',
+      imageAlt: 'Ảnh cũ',
+    });
+    expect(legacy).toEqual({
+      data: {
+        memoryDate: '2024-10-12',
+        title: 'Kỷ niệm cũ',
+        story: 'Một bức ảnh.',
+        imageUrl: '/samples/memory-1.svg',
+        imageAlt: 'Ảnh cũ',
+        images: [{ url: '/samples/memory-1.svg', alt: 'Ảnh cũ' }],
+      },
+    });
+
+    expect(
+      'error' in
+        validateMemoryPayload({
+          memoryDate: '2026-04-05',
+          title: 'Trống',
+          story: 'Không ảnh nào',
+          images: [],
+        })
+    ).toBe(true);
+
+    expect(
+      'error' in
+        validateMemoryPayload({
+          memoryDate: '2026-04-05',
+          title: 'Quá giới hạn',
+          story: 'Quá nhiều ảnh',
+          images: Array.from({ length: MAX_ALBUM_IMAGES + 1 }, (_, idx) => ({
+            url: `/uploads/${idx}.jpg`,
+            alt: '',
+          })),
+        })
+    ).toBe(true);
+
+    expect(
+      'error' in
+        validateMemoryPayload({
+          memoryDate: '2026-04-05',
+          title: 'Sai URL',
+          story: 'Có 1 ảnh lỗi',
+          images: [
+            { url: '/uploads/ok.jpg', alt: 'OK' },
+            { url: '/uploads/../bad.jpg', alt: 'Bad' },
+          ],
+        })
+    ).toBe(true);
+  });
+
+  test('getMemoryImages returns normalized images or single-image fallback, and getDroppedOrPastedFiles extracts multiple dropped or pasted files', () => {
+    expect(
+      getMemoryImages({
+        title: 'Bức cũ',
+        imageUrl: '/samples/memory-2.svg',
+        imageAlt: '',
+      })
+    ).toEqual([{ url: '/samples/memory-2.svg', alt: 'Bức cũ' }]);
+
+    expect(
+      getMemoryImages({
+        title: 'Album mới',
+        imageUrl: '/uploads/1.jpg',
+        imageAlt: '1',
+        images: [
+          { url: '/uploads/1.jpg', alt: '1' },
+          { url: '/uploads/2.jpg', alt: '' },
+        ],
+      })
+    ).toEqual([
+      { url: '/uploads/1.jpg', alt: '1' },
+      { url: '/uploads/2.jpg', alt: 'Album mới' },
+    ]);
+
+    const f1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+    const f2 = new File(['b'], 'b.png', { type: 'image/png' });
+    expect(getDroppedOrPastedFiles([f1, f2])).toEqual([f1, f2]);
+
+    const fakeItems = [
+      { kind: 'string', getAsFile: () => null },
+      { kind: 'file', getAsFile: () => f1 },
+      { kind: 'file', getAsFile: () => f2 },
+    ] as unknown as DataTransferItemList;
+    expect(getDroppedOrPastedFiles(null, fakeItems)).toEqual([f1, f2]);
+  });
+
+  test('validateUploadRequest, video detection helpers, and client visual validation support MP4/WebM/MOV/M4V up to 100MB while preserving image .toEqual parity', () => {
+    expect(MAX_VIDEO_BYTES).toBe(100 * 1024 * 1024);
+
+    // Server upload validation for video kind
+    for (const sample of [
+      { mimeType: 'video/mp4', size: 25 * 1024 * 1024, fileName: 'ky-niem.mp4' },
+      { mimeType: 'video/webm', size: 50 * 1024 * 1024, fileName: 'clip.webm' },
+      { mimeType: 'video/quicktime', size: MAX_VIDEO_BYTES, fileName: 'iphone.MOV' },
+      { mimeType: 'video/x-m4v', size: 8 * 1024 * 1024, fileName: 'clip.m4v' },
+    ]) {
+      expect(validateUploadRequest({ kind: 'video', ...sample })).toEqual({ valid: true });
+    }
+
+    expect(
+      validateUploadRequest({
+        kind: 'video',
+        mimeType: 'video/mp4',
+        size: MAX_VIDEO_BYTES + 1,
+        fileName: 'too-big.mp4',
+      })
+    ).toEqual({ valid: false, error: 'Video vượt quá giới hạn tối đa 100MB.' });
+
+    for (const badVideo of [
+      { mimeType: 'video/x-msvideo', size: 1024, fileName: 'old.avi' },
+      { mimeType: 'image/svg+xml', size: 1024, fileName: 'xss.svg' },
+    ]) {
+      expect(validateUploadRequest({ kind: 'video', ...badVideo }).valid).toBe(false);
+    }
+
+    // URL & File video detection helpers
+    expect(isVideoMediaUrl('/uploads/sunset.mp4?v=1#t=2')).toBe(true);
+    expect(isVideoMediaUrl('https://cdn.example.com/clip.MOV')).toBe(true);
+    expect(isVideoMediaUrl('blob:http://localhost:3000/abc')).toBe(false);
+    expect(isVideoMediaUrl('/uploads/photo.jpg')).toBe(false);
+
+    const validVid = new File([new Uint8Array([1, 2])], 'clip.mp4', { type: 'video/mp4' });
+    const movVid = new File([new Uint8Array([1, 2])], 'iphone.mov', { type: '' });
+    const badTxt = new File(['abc'], 'notes.txt', { type: 'text/plain' });
+    expect(isVideoFile(validVid)).toBe(true);
+    expect(isVideoFile(movVid)).toBe(true);
+    expect(validateClientVisualMediaFile(validVid)).toBeNull();
+    expect(validateClientVisualMediaFile(movVid)).toBeNull();
+    expect(validateClientVisualMediaFile(badTxt)).toBe(VISUAL_MEDIA_INVALID_TYPE_MESSAGE);
+
+    expect(isVideoMediaItem({ url: '/uploads/photo.jpg' })).toBe(false);
+    expect(isVideoMediaItem({ url: '/uploads/clip.mp4' })).toBe(true);
+    expect(formatAlbumMediaCountVi([{ url: '/a.jpg' }, { url: '/b.jpg' }])).toBe('2 ảnh');
+    expect(formatAlbumMediaCountVi([{ url: '/a.mp4', mediaType: 'video' }])).toBe('1 video');
+    expect(
+      formatAlbumMediaCountVi([
+        { url: '/a.jpg' },
+        { url: '/b.mp4', mediaType: 'video' },
+        { url: '/c.png' },
+      ])
+    ).toBe('2 ảnh · 1 video');
+
+    // validateMemoryPayload & getMemoryImages tag videos while keeping images omitted-mediaType
+    const mixed = validateMemoryPayload({
+      memoryDate: '2026-05-01',
+      title: 'Kỷ niệm có video',
+      story: 'Cả ảnh và video.',
+      images: [
+        { url: '/uploads/cover.jpg', alt: 'Ảnh bìa' },
+        { url: '/uploads/sunset.mp4', alt: 'Video hoàng hôn' },
+      ],
+    });
+    expect(mixed).toEqual({
+      data: {
+        memoryDate: '2026-05-01',
+        title: 'Kỷ niệm có video',
+        story: 'Cả ảnh và video.',
+        imageUrl: '/uploads/cover.jpg',
+        imageAlt: 'Ảnh bìa',
+        images: [
+          { url: '/uploads/cover.jpg', alt: 'Ảnh bìa' },
+          { url: '/uploads/sunset.mp4', alt: 'Video hoàng hôn', mediaType: 'video' },
+        ],
+      },
+    });
+
+    expect(
+      getMemoryImages({
+        title: 'Chỉ video',
+        imageUrl: '/uploads/clip.mov',
+        imageAlt: '',
+      })
+    ).toEqual([{ url: '/uploads/clip.mov', alt: 'Chỉ video', mediaType: 'video' }]);
+
+    // Long multi-paragraph album stories (>1200 chars) are preserved up to MAX_MEMORY_STORY_LENGTH (6000)
+    expect(MAX_MEMORY_STORY_LENGTH).toBe(6000);
+    const longStory = `${'Đoạn kỷ niệm dài. '.repeat(90)}\n\n${'Kết thư ngọt ngào.'.repeat(20)}`.trim();
+    expect(longStory.length).toBeGreaterThan(1500);
+    const longRes = validateMemoryPayload({
+      memoryDate: '2026-05-01',
+      title: 'Album câu chuyện dài',
+      story: longStory,
+      imageUrl: '/uploads/cover.jpg',
+    });
+    expect('data' in longRes && longRes.data.story).toBe(longStory);
   });
 });

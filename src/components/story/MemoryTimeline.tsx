@@ -1,9 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { CalendarHeart, Heart, LayoutGrid, List, Maximize2 } from 'lucide-react';
+import { ArrowRight, CalendarHeart, Heart, Images, LayoutGrid, List, Maximize2, Play } from 'lucide-react';
 import { formatMemoryDateVi } from '@/lib/date-utils';
+import {
+  formatAlbumMediaCountVi,
+  getMemoryImages,
+  isVideoMediaItem,
+  isVideoMediaUrl,
+} from '@/lib/memory-album';
 import { MemoryItem } from '@/types/memories';
 
 interface MemoryTimelineProps {
@@ -39,32 +46,32 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
   return (
     <section
       id="timeline"
-      className="mx-auto max-w-6xl scroll-mt-24 px-4 py-14 sm:px-8 sm:py-20 md:scroll-mt-20"
+      className="mx-auto max-w-6xl scroll-mt-20 px-4 py-10 sm:px-8 sm:py-20 md:scroll-mt-20"
     >
       <div className="mb-10 flex flex-col gap-5 sm:mb-12 md:flex-row md:items-end md:justify-between">
         <div className="max-w-2xl text-left">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-950/55 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-rose-200 shadow-sm">
-            <CalendarHeart className="h-3.5 w-3.5 text-rose-400" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-100/80 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-amber-950 shadow-sm">
+            <CalendarHeart className="h-3.5 w-3.5 text-red-600" />
             GIAN TRƯNG BÀY KỶ NIỆM
           </span>
-          <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-rose-50 sm:text-5xl">
+          <h2 className="mt-3 font-serif text-2xl font-bold tracking-tight text-stone-900 sm:text-5xl">
             Từng trang nhật ký nhuốm màu thương nhớ
           </h2>
-          <p className="mt-2.5 text-sm text-rose-200/75 sm:text-base">
+          <p className="mt-2.5 text-sm text-stone-700 sm:text-base">
             Chạm nhẹ vào từng tấm ảnh để sống lại khoảnh khắc tim mình rung lên vì nhau nhé
           </p>
         </div>
 
         {memories.length > 0 && (
-          <div className="glass-pill inline-flex shrink-0 self-start rounded-full p-1 md:self-auto">
+          <div className="glass-pill grid w-full shrink-0 grid-cols-2 rounded-full p-1 sm:inline-flex sm:w-auto md:self-auto">
             <button
               type="button"
               onClick={() => setViewMode('bento')}
               aria-pressed={viewMode === 'bento'}
-              className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+              className={`inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition sm:min-h-[36px] ${
                 viewMode === 'bento'
-                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-[0_6px_20px_rgba(225,29,72,0.35)]'
-                  : 'text-rose-200/75 hover:text-rose-50'
+                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-[0_6px_18px_rgba(220,38,38,0.28)]'
+                  : 'text-stone-700 hover:text-stone-950'
               }`}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
@@ -74,10 +81,10 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
               type="button"
               onClick={() => setViewMode('stream')}
               aria-pressed={viewMode === 'stream'}
-              className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+              className={`inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition sm:min-h-[36px] ${
                 viewMode === 'stream'
-                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-[0_6px_20px_rgba(225,29,72,0.35)]'
-                  : 'text-rose-200/75 hover:text-rose-50'
+                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-[0_6px_18px_rgba(220,38,38,0.28)]'
+                  : 'text-stone-700 hover:text-stone-950'
               }`}
             >
               <List className="h-3.5 w-3.5" />
@@ -89,9 +96,9 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
 
       {memories.length === 0 ? (
         <div className="glass-card mx-auto max-w-lg rounded-3xl p-8 text-center">
-          <p className="text-sm leading-relaxed text-rose-200/80 sm:text-base">
+          <p className="text-sm leading-relaxed text-stone-700 sm:text-base">
             Chưa có kỷ niệm nào được thêm vào dòng thời gian. Anh có thể đăng nhập{' '}
-            <span className="font-semibold text-rose-400">/admin</span> để cất lên bức ảnh ngọt
+            <span className="font-semibold text-red-600">/admin</span> để cất lên bức ảnh ngọt
             ngào đầu tiên của hai đứa mình nhé.
           </p>
         </div>
@@ -108,6 +115,15 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
               memory.title || formatMemoryDateVi(memory.memoryDate)
             }`;
             const indexLabel = `#${String(index + 1).padStart(2, '0')}`;
+            const images = getMemoryImages(memory);
+            const photoCount = images.length;
+            const hasAnyVideo = images.some(isVideoMediaItem);
+            const coverIsVideo = images[0]
+              ? isVideoMediaItem(images[0])
+              : isVideoMediaUrl(memory.imageUrl);
+            const mediaCountLabel = formatAlbumMediaCountVi(images);
+            const previewThumbs = images.slice(0, 4);
+            const extraCount = Math.max(0, photoCount - 4);
 
             return (
               <motion.article
@@ -121,16 +137,24 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                 )}`}
               >
                 <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-rose-500/25 bg-rose-950/60 px-3 py-1 text-xs font-semibold tracking-wider text-rose-200">
-                    <span
-                      aria-hidden="true"
-                      className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]"
-                    />
-                    <span>{indexLabel}</span>
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-100/80 px-2.5 py-1 text-[11px] font-semibold tracking-wider text-amber-950 sm:gap-2 sm:px-3 sm:text-xs">
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(220,38,38,0.75)]"
+                      />
+                      <span>{indexLabel}</span>
+                    </span>
+                    {(photoCount > 1 || hasAnyVideo) && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-900 sm:text-xs">
+                        <Images className="h-3 w-3 shrink-0 text-red-600" />
+                        <span>{mediaCountLabel}</span>
+                      </span>
+                    )}
+                  </div>
 
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-pink-500/20 bg-[#12070c]/85 px-3 py-1 text-xs font-medium text-rose-200/90">
-                    <Heart className="h-3 w-3 fill-rose-500 text-rose-500" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-[#FFFDF5] px-2.5 py-1 text-[11px] font-medium text-stone-800 sm:px-3 sm:text-xs">
+                    <Heart className="h-3 w-3 fill-red-500 text-red-500" />
                     {formatMemoryDateVi(memory.memoryDate)}
                   </span>
                 </div>
@@ -139,39 +163,151 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                   type="button"
                   onClick={() => onOpenPhoto(index)}
                   aria-label={zoomLabel}
-                  className={`group relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-rose-500/15 bg-[#0b0408]/95 p-2 text-left focus:outline-none focus:ring-2 focus:ring-rose-400/60 md:min-h-[240px] ${
+                  className={`group relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-amber-300/70 bg-[#FEF9C3]/55 p-2 text-left focus:outline-none focus:ring-2 focus:ring-red-500/60 md:min-h-[240px] ${
                     viewMode === 'bento' && memories.length > 1 && !isTrailingOddCard(index)
                       ? 'md:h-[300px] lg:h-[360px]'
                       : ''
                   }`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={memory.imageUrl}
-                    alt={memory.imageAlt || memory.title || 'Ảnh kỷ niệm'}
-                    loading="lazy"
-                    decoding="async"
-                    className={`mx-auto w-auto max-w-full rounded-xl object-contain transition duration-300 group-hover:scale-[1.018] motion-reduce:transform-none motion-reduce:transition-none ${
-                      viewMode === 'bento' && memories.length > 1 && !isTrailingOddCard(index)
-                        ? 'max-h-[380px] md:max-h-full'
-                        : 'max-h-[380px] lg:max-h-[420px]'
-                    }`}
-                  />
-                  <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-[#12070c]/85 px-2.5 py-1 text-[11px] font-medium text-rose-100 shadow-sm backdrop-blur-md">
-                    <Maximize2 className="h-3 w-3 text-rose-400" />
-                    <span>Phóng to</span>
+                  {coverIsVideo ? (
+                    <>
+                      <video
+                        src={memory.imageUrl}
+                        muted
+                        loop
+                        playsInline
+                        preload="metadata"
+                        aria-label={memory.imageAlt || memory.title || 'Video kỷ niệm'}
+                        className={`mx-auto w-auto max-w-full rounded-xl object-contain transition duration-300 group-hover:scale-[1.018] motion-reduce:transform-none motion-reduce:transition-none ${
+                          viewMode === 'bento' && memories.length > 1 && !isTrailingOddCard(index)
+                            ? 'max-h-[380px] md:max-h-full'
+                            : 'max-h-[380px] lg:max-h-[420px]'
+                        }`}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                      >
+                        <span className="flex h-12 w-12 items-center justify-center rounded-full border border-red-300 bg-[#FFFDF5]/95 text-red-600 shadow-[0_0_20px_rgba(220,38,38,0.2)]">
+                          <Play className="h-5 w-5 translate-x-0.5 fill-current" />
+                        </span>
+                      </span>
+                    </>
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={memory.imageUrl}
+                      alt={memory.imageAlt || memory.title || 'Ảnh kỷ niệm'}
+                      loading="lazy"
+                      decoding="async"
+                      className={`mx-auto w-auto max-w-full rounded-xl object-contain transition duration-300 group-hover:scale-[1.018] motion-reduce:transform-none motion-reduce:transition-none ${
+                        viewMode === 'bento' && memories.length > 1 && !isTrailingOddCard(index)
+                          ? 'max-h-[380px] md:max-h-full'
+                          : 'max-h-[380px] lg:max-h-[420px]'
+                      }`}
+                    />
+                  )}
+                  <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-[#FFFBEB]/90 px-2.5 py-1 text-[11px] font-medium text-stone-800 shadow-sm backdrop-blur-md">
+                    {coverIsVideo ? (
+                      <>
+                        <Play className="h-3 w-3 fill-red-600 text-red-600" />
+                        <span>Phát video</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="h-3 w-3 text-red-600" />
+                        <span>Phóng to</span>
+                      </>
+                    )}
                   </span>
                 </button>
 
-                <div className="mt-4 flex-1 px-1">
-                  {memory.title && (
-                    <h3 className="break-words [overflow-wrap:anywhere] font-serif text-xl font-bold text-rose-50 sm:text-2xl">
-                      {memory.title}
-                    </h3>
-                  )}
-                  <p className="mt-1.5 whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-rose-200/80 sm:text-[15px]">
-                    {memory.story}
-                  </p>
+                {photoCount > 1 && (
+                  <div className="mt-2.5 grid grid-cols-4 gap-2">
+                    {previewThumbs.map((thumb, thumbIdx) => {
+                      const showMoreOverlay = thumbIdx === 3 && extraCount > 0;
+                      const thumbIsVideo = isVideoMediaItem(thumb);
+                      return (
+                        <Link
+                          key={`${memory.id}-thumb-${thumbIdx}`}
+                          href={`/memories/${memory.id}`}
+                          aria-label={`Mở album xem mục ${thumbIdx + 1}: ${memory.title || memory.memoryDate}`}
+                          className="group relative aspect-square overflow-hidden rounded-xl border border-amber-300/75 bg-[#FEF9C3]/55 transition hover:border-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                        >
+                          {thumbIsVideo ? (
+                            <>
+                              <video
+                                src={thumb.url}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                aria-label={thumb.alt}
+                                className="h-full w-full object-cover"
+                              />
+                              {!showMoreOverlay && (
+                                <span
+                                  aria-hidden="true"
+                                  className="pointer-events-none absolute inset-0 flex items-center justify-center bg-stone-950/35"
+                                >
+                                  <Play className="h-4 w-4 fill-white text-white" />
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={thumb.url}
+                              alt={thumb.alt}
+                              loading="lazy"
+                              decoding="async"
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105 motion-reduce:transition-none"
+                            />
+                          )}
+                          {showMoreOverlay && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-stone-950/65 text-xs font-bold text-white">
+                              +{extraCount}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-1 flex-col justify-between gap-3 px-1">
+                  <div>
+                    {memory.title && (
+                      <h3 className="break-words [overflow-wrap:anywhere] font-serif text-xl font-bold text-stone-900 sm:text-2xl">
+                        {memory.title}
+                      </h3>
+                    )}
+                    <p
+                      className={`mt-1.5 whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-stone-700 sm:text-[15px] ${
+                        photoCount > 1 ? 'line-clamp-3' : ''
+                      }`}
+                    >
+                      {memory.story}
+                    </p>
+                  </div>
+
+                  <div className="pt-1">
+                    <Link
+                      href={`/memories/${memory.id}`}
+                      className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-100/80 px-3.5 py-2 text-xs font-semibold text-stone-900 transition hover:border-red-300 hover:bg-amber-200/80 hover:text-stone-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:min-h-[38px] sm:w-auto sm:py-1.5"
+                    >
+                      <Images className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                      <span>
+                        {!hasAnyVideo
+                          ? photoCount > 1
+                            ? `Xem chi tiết album (${photoCount} ảnh)`
+                            : 'Xem chi tiết album'
+                          : photoCount > 1
+                            ? `Xem chi tiết album (${mediaCountLabel})`
+                            : 'Xem chi tiết video & kỷ niệm'}
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                    </Link>
+                  </div>
                 </div>
               </motion.article>
             );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
@@ -137,6 +137,23 @@ function makeInitialData(overrides?: Partial<AdminSiteData>): AdminSiteData {
         createdAt: '2026-11-15T00:00:00.000Z',
       },
     ],
+    diaryEntries: [
+      {
+        id: 'diary-v1',
+        entryDate: '2026-11-16',
+        title: 'Trang viết của Em',
+        content: 'Hôm nay trời nắng đẹp, nhớ anh.',
+        mood: 'loved',
+        imageUrl: '',
+        imageAlt: '',
+        authorId: VIEWER_USER.id,
+        authorUsername: 'nguoithuong',
+        authorDisplayName: VIEWER_USER.displayName,
+        authorRole: 'viewer',
+        createdAt: '2026-11-16T10:00:00.000Z',
+        updatedAt: '2026-11-16T10:00:00.000Z',
+      },
+    ],
     users: [ADMIN_USER, VIEWER_USER],
     activityLogs: SAMPLE_LOGS,
     trafficSummary: {
@@ -246,7 +263,7 @@ describe('AdminLoginForm', () => {
     expect(screen.queryByText('love2026')).not.toBeInTheDocument();
   });
 
-  test('renders in Dark Velvet & Crimson-Rose theme with zero sky/indigo/blue/violet/purple/slate/bg-white classes', () => {
+  test('renders in Pale Yellow & Red Hearts theme with zero sky/indigo/blue/violet/purple/slate/bg-white classes', () => {
     vi.stubEnv('NODE_ENV', 'development');
     const { container } = render(<AdminLoginForm showDevDefaultHint={true} />);
 
@@ -255,39 +272,40 @@ describe('AdminLoginForm', () => {
     const usernameInput = screen.getByLabelText(/Tài khoản quản trị/i);
     const passwordInput = screen.getByLabelText(/Mật khẩu quản trị/i);
     expect(usernameInput).toHaveClass(
-      'bg-[#0d0408]/90',
-      'text-rose-50',
+      'bg-[#FFFDF5]',
+      'text-stone-900',
       'text-base',
       'sm:text-sm',
-      'placeholder:text-rose-300/70'
+      'placeholder:text-stone-500'
     );
     expect(passwordInput).toHaveClass(
-      'bg-[#0d0408]/90',
-      'text-rose-50',
+      'bg-[#FFFDF5]',
+      'text-stone-900',
       'text-base',
       'sm:text-sm',
-      'placeholder:text-rose-300/70'
+      'placeholder:text-stone-500'
     );
 
     const backLink = screen.getByRole('link', { name: /Về trang kỷ niệm/i });
     expect(backLink).toHaveClass(
       'focus-visible:outline-none',
       'focus-visible:ring-2',
-      'focus-visible:ring-rose-400'
+      'focus-visible:ring-red-500'
     );
     const heartWrapper = backLink.nextElementSibling as HTMLElement;
     expect(heartWrapper).toHaveClass('shrink-0');
+    expect(heartWrapper.querySelector('svg')).toHaveClass('fill-red-500', 'text-red-500');
 
     const submitBtn = screen.getByRole('button', { name: /Vào trang quản trị/i });
     expect(submitBtn).toHaveClass(
-      'to-pink-600',
+      'to-red-500',
       'text-white',
-      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:shadow-[0_14px_34px_rgba(220,38,38,0.38)]',
       'hover:ring-1',
-      'hover:ring-rose-300/40',
+      'hover:ring-red-300',
       'focus-visible:outline-none',
       'focus-visible:ring-2',
-      'focus-visible:ring-rose-400'
+      'focus-visible:ring-red-500'
     );
     expect(submitBtn).not.toHaveClass('hover:brightness-110');
 
@@ -298,6 +316,10 @@ describe('AdminLoginForm', () => {
       expect(token).not.toBe('hover:brightness-110');
       expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
       expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-(?:rose|pink|red|emerald|amber)-950(?:\/|$)/);
+      expect(token).not.toMatch(
+        /#(?:080306|0d0408|0b0408|090306|050203|12060b|14060c|16070d|16080f|190911|071f17|23070e)/i
+      );
       expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
       expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40|60)$/);
       const opacityMatch = token.match(
@@ -925,10 +947,10 @@ describe('AdminDashboard 5-tab UI', () => {
       />
     );
 
-    // 5 navigation tabs have >= 40px touch target
+    // Navigation tabs meet mobile 44px touch target (>= 42px on sm+)
     const nav = screen.getByRole('navigation', { name: /Mục quản trị/i });
     for (const tabBtn of within(nav).getAllByRole('button')) {
-      expect(tabBtn).toHaveClass('min-h-[40px]');
+      expect(tabBtn).toHaveClass('min-h-[44px]', 'sm:min-h-[42px]');
     }
 
     // Create memory
@@ -1047,7 +1069,7 @@ describe('AdminDashboard 5-tab UI', () => {
     });
   });
 
-  test('renders Dark Velvet & Crimson-Rose styling across all 5 tabs, dark <option> controls, and zero legacy sky/indigo/blue/violet/purple/slate/bg-white classes', async () => {
+  test('renders Pale Yellow & Red Hearts styling across all 5 tabs, light <option> controls, and zero legacy sky/indigo/blue/violet/purple/slate/bg-white classes', async () => {
     const user = userEvent.setup();
     const allEventTypes: ActivityEventType[] = [
       'page_visit',
@@ -1060,6 +1082,8 @@ describe('AdminDashboard 5-tab UI', () => {
       'music_toggled',
       'memory_viewed',
       'letter_opened',
+      'diary_saved',
+      'diary_deleted',
       'logout',
     ];
     const allLogs: ActivityLogItem[] = allEventTypes.map((eventType, idx) => ({
@@ -1074,7 +1098,7 @@ describe('AdminDashboard 5-tab UI', () => {
       createdAt: '2026-11-15T10:05:30.000Z',
     }));
 
-    function assertDarkVelvetTheme(root: HTMLElement) {
+    function assertPaleYellowTheme(root: HTMLElement) {
       const classTokens = Array.from(root.querySelectorAll('[class]')).flatMap((el) =>
         (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
       );
@@ -1082,6 +1106,10 @@ describe('AdminDashboard 5-tab UI', () => {
         expect(token).not.toBe('hover:brightness-110');
         expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
         expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+        expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-(?:rose|pink|red|emerald|amber)-950(?:\/|$)/);
+        expect(token).not.toMatch(
+          /#(?:080306|0d0408|0b0408|090306|050203|12060b|14060c|16070d|16080f|190911|071f17|23070e)/i
+        );
         expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
         expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40|60)$/);
         const opacityMatch = token.match(
@@ -1094,7 +1122,7 @@ describe('AdminDashboard 5-tab UI', () => {
 
       const selectOptions = root.querySelectorAll('select option');
       for (const opt of selectOptions) {
-        expect(opt).toHaveClass('bg-[#16080f]', 'text-rose-50');
+        expect(opt).toHaveClass('bg-[#FFFBEB]', 'text-stone-900');
       }
     }
 
@@ -1120,25 +1148,26 @@ describe('AdminDashboard 5-tab UI', () => {
     );
 
     // Tab 1: open form + open delete confirmation
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
     await user.click(screen.getByRole('button', { name: /Thêm kỷ niệm mới/i }));
     expect(screen.getByLabelText(/Ngày kỷ niệm/i).parentElement).toHaveClass('min-w-0');
     expect(screen.getByLabelText(/Tiêu đề ngắn/i).parentElement).toHaveClass('min-w-0');
     const memoryDropzone = document.getElementById('memory-file-upload')!.closest('label')!;
     expect(memoryDropzone).toHaveClass(
-      'focus-within:border-rose-400',
+      'focus-within:border-red-500',
       'focus-within:ring-2',
-      'focus-within:ring-rose-400'
+      'focus-within:ring-red-500/30'
     );
     await user.type(screen.getByLabelText(/Đường dẫn ảnh/i), '/samples/memory-1.svg');
     expect(screen.getByRole('img', { name: /Xem trước ảnh/i })).toHaveClass('max-w-full');
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
     await user.click(screen.getByRole('button', { name: /^Huỷ$/i }));
     await user.click(screen.getByRole('button', { name: /^Xoá$/i }));
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
 
     // Tab 2: settings + trigger success toast + responsive/a11y checks
     const nav = screen.getByRole('navigation', { name: /Mục quản trị/i });
+    expect(nav).toHaveClass('overflow-x-auto', 'flex-nowrap', 'md:flex-wrap');
     await user.click(within(nav).getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i }));
     expect(within(nav).getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i })).toHaveAttribute(
       'aria-current',
@@ -1151,42 +1180,48 @@ describe('AdminDashboard 5-tab UI', () => {
     expect(screen.getByLabelText(/Ngày bắt đầu yêu/i).parentElement).toHaveClass('min-w-0');
     const musicUrlInput = screen.getByLabelText(/Đường dẫn nhạc nền/i);
     expect(musicUrlInput).toHaveAttribute('id', 'settings-music-url');
-    expect(musicUrlInput).toHaveClass('placeholder:text-rose-300/70');
+    expect(musicUrlInput).toHaveClass('placeholder:text-stone-500');
     expect(musicUrlInput.parentElement?.parentElement).toHaveClass(
       'sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)]'
     );
     const audioFilenameSpan = screen.getByText(/Tải file nhạc/i);
     expect(audioFilenameSpan).toHaveClass('max-w-full', 'sm:max-w-[220px]', 'truncate');
     expect(audioFilenameSpan.closest('label')).toHaveClass(
-      'focus-within:border-rose-400',
+      'focus-within:border-red-500',
       'focus-within:ring-2',
-      'focus-within:ring-rose-400'
+      'focus-within:ring-red-500/30'
     );
+    expect(screen.getByText(/Luôn phát tự động mặc định/i)).toBeInTheDocument();
     expect(
-      screen.getByRole('checkbox', { name: /Hiển thị nút bật\/tắt nhạc/i }).closest('label')
-    ).toHaveClass('min-h-[36px]', 'py-1');
+      screen.queryByRole('checkbox', { name: /Hiển thị nút bật\/tắt nhạc/i })
+    ).not.toBeInTheDocument();
     expect(
       screen
         .getByRole('checkbox', { name: /Khoá bảo vệ trang kỷ niệm/i })
         .closest('label')
     ).toHaveClass('min-h-[36px]', 'py-1');
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
     await user.click(screen.getByRole('button', { name: /Lưu cài đặt/i }));
     const successToast = await screen.findByRole('status');
     expect(successToast).toBeInTheDocument();
     const toastCloseBtn = within(successToast).getByRole('button', { name: /Đóng/i });
     expect(toastCloseBtn).toHaveClass(
-      'text-white/80',
+      'text-stone-700',
       'focus-visible:outline-none',
       'focus-visible:ring-2',
-      'focus-visible:ring-white/60'
+      'focus-visible:ring-red-500'
     );
     expect(toastCloseBtn).not.toHaveClass('text-rose-100/80', 'hover:bg-rose-500/20');
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
 
     // Tab 3: letter & preview
     await user.click(screen.getByRole('button', { name: /Phong thư tâm sự/i }));
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
+
+    // Tab Diary: couple daily diary management
+    await user.click(screen.getByRole('button', { name: /Nhật ký mỗi ngày/i }));
+    await user.click(screen.getByRole('button', { name: /Viết cho hôm nay/i }));
+    assertPaleYellowTheme(container);
 
     // Tab 4: create form + user cards + inline edit form + inline delete confirm
     await user.click(screen.getByRole('button', { name: /Tài khoản & Kiểm soát truy cập/i }));
@@ -1202,7 +1237,7 @@ describe('AdminDashboard 5-tab UI', () => {
     ).toHaveLength(2);
     const viewerCard = screen.getByTestId(`user-card-${VIEWER_USER.id}`);
     await user.click(within(viewerCard).getByRole('button', { name: /^Xoá$/i }));
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
 
     // Tab 5: stat cards + filter selects + all 11 event badges + mobile/desktop views
     await user.click(screen.getByRole('button', { name: /Nhật ký ra vào & Hành động/i }));
@@ -1219,7 +1254,7 @@ describe('AdminDashboard 5-tab UI', () => {
     expect(deviceCells[0]).toHaveClass('max-w-[200px]', 'truncate');
     expect(deviceCells[0]).toHaveAttribute('title', 'Chrome · macOS');
     expect(container.querySelectorAll('select option').length).toBeGreaterThanOrEqual(16);
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
 
     // Supabase mode + empty memories/logs state
     rerender(
@@ -1228,6 +1263,470 @@ describe('AdminDashboard 5-tab UI', () => {
         storageStatus={{ ...STORAGE_STATUS, mode: 'supabase' }}
       />
     );
-    assertDarkVelvetTheme(container);
+    assertPaleYellowTheme(container);
+  });
+
+  test('Tab 1 supports dragging & dropping images (onto form dropzone & quick header dropzone), pasting clipboard images, clearing pending file, and rejecting invalid dropped files', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock-preview'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    const createdMemory = {
+      id: 'mem-dropped',
+      memoryDate: '2026-04-05',
+      title: 'Góc phố nắng chiều',
+      story: 'Chuyến đi cùng em.',
+      imageUrl: '/uploads/eiu-1.jpg',
+      imageAlt: 'Góc phố nắng chiều',
+      sortOrder: 1,
+      createdAt: '2026-11-16T00:00:00.000Z',
+    };
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method || 'GET';
+      if (url === '/api/admin/upload-url' && method === 'POST') {
+        return new Response(
+          JSON.stringify({ mode: 'local', uploadEndpoint: '/api/admin/upload' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/upload' && method === 'POST') {
+        return new Response(JSON.stringify({ publicUrl: '/uploads/eiu-1.jpg' }), { status: 200 });
+      }
+      if (url === '/api/admin/memories' && method === 'POST') {
+        return new Response(JSON.stringify({ memory: createdMemory }), { status: 201 });
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
+    });
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    const validJpg = new File([new Uint8Array([1, 2, 3])], 'eiu-1.jpg', { type: 'image/jpeg' });
+
+    // 1. Quick drop when form is closed -> auto-opens form, shows filename & preview
+    const quickDropzone = screen.getByTestId('memories-quick-dropzone');
+    fireEvent.drop(quickDropzone, { dataTransfer: { files: [validJpg] } });
+
+    expect(screen.getByText('eiu-1.jpg')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Xem trước ảnh/i })).toHaveAttribute(
+      'src',
+      'blob:mock-preview'
+    );
+
+    // 2. Clear pending file button resets back to default drop prompt
+    await user.click(screen.getByRole('button', { name: /Bỏ ảnh vừa chọn/i }));
+    expect(screen.queryByText('eiu-1.jpg')).not.toBeInTheDocument();
+    expect(screen.getByText(/Kéo thả ảnh hoặc video vào đây để chọn/i)).toBeInTheDocument();
+
+    // 3. Drag-enter / child drag-enter+leave / outside drag-leave on form dropzone
+    const dropzone = screen.getByTestId('memory-image-dropzone');
+    const innerLabel = dropzone.querySelector('label')!;
+    fireEvent.dragEnter(dropzone);
+    expect(screen.getByText(/Thả ảnh hoặc video vào đây để xem trước/i)).toBeInTheDocument();
+
+    fireEvent.dragEnter(innerLabel);
+    fireEvent.dragLeave(dropzone);
+    expect(screen.getByText(/Thả ảnh hoặc video vào đây để xem trước/i)).toBeInTheDocument();
+
+    fireEvent.dragLeave(dropzone);
+    expect(screen.getByText(/Kéo thả ảnh hoặc video vào đây để chọn/i)).toBeInTheDocument();
+
+    // 4. Reject invalid dropped file cleanly without creating preview
+    const invalidTxt = new File(['bad'], 'notes.txt', { type: 'text/plain' });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [invalidTxt] } });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF, AVIF) hoặc video (MP4, WebM, MOV, M4V).'
+    );
+    expect(screen.queryByRole('img', { name: /Xem trước ảnh/i })).not.toBeInTheDocument();
+
+    // 5. Clipboard paste image
+    const pastedPng = new File([new Uint8Array([4, 5])], 'pasted.png', { type: 'image/png' });
+    fireEvent.paste(dropzone, { clipboardData: { files: [pastedPng] } });
+    expect(screen.getByText('pasted.png')).toBeInTheDocument();
+
+    // 6. Drop valid image & submit form -> uploads and saves memory
+    fireEvent.drop(dropzone, { dataTransfer: { files: [validJpg] } });
+    expect(screen.getByText('eiu-1.jpg')).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Câu chuyện/i), 'Chuyến đi cùng em.');
+    await user.click(screen.getByRole('button', { name: /Thêm vào dòng thời gian/i }));
+
+    expect(await screen.findByText('Chuyến đi cùng em.')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith('/api/admin/upload-url', expect.anything());
+    expect(fetchSpy).toHaveBeenCalledWith('/api/admin/upload', expect.anything());
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/admin/memories',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  test('Tab "Nhật ký mỗi ngày" in /admin supports creating with dropped photo, editing partner entry, updating tab count badge, 2-click delete, and 401 redirect', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:admin-diary-preview'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    let return401OnDelete = false;
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method || 'GET';
+      if (url === '/api/diary/upload-url' && method === 'POST') {
+        return new Response(
+          JSON.stringify({ mode: 'local', uploadEndpoint: '/api/diary/upload' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/diary/upload' && method === 'POST') {
+        return new Response(JSON.stringify({ publicUrl: '/uploads/admin-diary.jpg' }), {
+          status: 200,
+        });
+      }
+      if (url === '/api/diary' && method === 'POST') {
+        const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            entry: {
+              id: 'diary-admin-created',
+              entryDate: String(body.entryDate),
+              title: String(body.title || ''),
+              content: String(body.content),
+              mood: String(body.mood || 'loved'),
+              imageUrl: String(body.imageUrl || ''),
+              imageAlt: String(body.imageAlt || ''),
+              authorId: ADMIN_USER.id,
+              authorUsername: ADMIN_USER.username,
+              authorDisplayName: ADMIN_USER.displayName,
+              authorRole: 'admin',
+              createdAt: '2026-11-17T10:00:00.000Z',
+              updatedAt: '2026-11-17T10:00:00.000Z',
+            },
+          }),
+          { status: 201 }
+        );
+      }
+      if (url === '/api/diary/diary-v1' && method === 'PUT') {
+        const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            entry: {
+              id: 'diary-v1',
+              entryDate: String(body.entryDate),
+              title: String(body.title || ''),
+              content: String(body.content),
+              mood: String(body.mood || 'loved'),
+              imageUrl: '',
+              imageAlt: '',
+              authorId: VIEWER_USER.id,
+              authorUsername: 'nguoithuong',
+              authorDisplayName: VIEWER_USER.displayName,
+              authorRole: 'viewer',
+              createdAt: '2026-11-16T10:00:00.000Z',
+              updatedAt: '2026-11-17T10:05:00.000Z',
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.startsWith('/api/diary/') && method === 'DELETE') {
+        if (return401OnDelete) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
+    });
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    const diaryTabBtn = screen.getByRole('button', { name: /Nhật ký mỗi ngày \(1\)/i });
+    await user.click(diaryTabBtn);
+
+    // Edit partner's entry
+    const viewerEntryCard = screen.getByTestId('diary-card-diary-v1');
+    await user.click(within(viewerEntryCard).getByRole('button', { name: /^Sửa$/i }));
+    const titleInput = screen.getByLabelText(/Tiêu đề nhỏ hôm nay/i);
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Trang viết của Em (đã chỉnh)');
+    await user.click(screen.getByRole('button', { name: /Lưu thay đổi nhật ký/i }));
+    expect(await screen.findByText('Trang viết của Em (đã chỉnh)')).toBeInTheDocument();
+
+    // Quick-drop image to create new diary entry -> updates tab badge to (2)
+    const dropFile = new File([new Uint8Array([1, 2, 3])], 'admin-diary.jpg', {
+      type: 'image/jpeg',
+    });
+    fireEvent.drop(screen.getByTestId('diary-quick-dropzone'), {
+      dataTransfer: { files: [dropFile] },
+    });
+    await user.type(screen.getByLabelText(/Nội dung nhật ký/i), 'Một ngày bận rộn nhưng vui.');
+    await user.click(screen.getByRole('button', { name: /Lưu trang nhật ký/i }));
+
+    expect(await screen.findByText('Một ngày bận rộn nhưng vui.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Nhật ký mỗi ngày \(2\)/i })).toBeInTheDocument();
+
+    // 2-click delete -> updates tab badge back to (1)
+    const createdCard = screen.getByTestId('diary-card-diary-admin-created');
+    await user.click(within(createdCard).getByRole('button', { name: /^Xoá$/i }));
+    await user.click(within(createdCard).getByRole('button', { name: /Xác nhận xoá/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Nhật ký mỗi ngày \(1\)/i })).toBeInTheDocument();
+    });
+
+    // 401 on delete redirects to /admin/login
+    return401OnDelete = true;
+    const remainingCard = screen.getByTestId('diary-card-diary-v1');
+    await user.click(within(remainingCard).getByRole('button', { name: /^Xoá$/i }));
+    await user.click(within(remainingCard).getByRole('button', { name: /Xác nhận xoá/i }));
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/admin/login');
+    });
+  });
+
+  test('Tab 1 supports dropping multiple images at once into a single memory album, setting cover image, reordering/removing items, and submitting images[] array', async () => {
+    const user = userEvent.setup();
+    let previewSeq = 0;
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => `blob:album-preview-${++previewSeq}`),
+      revokeObjectURL: vi.fn(),
+    });
+
+    let postedBody: Record<string, unknown> | null = null;
+    let uploadIndex = 0;
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method || 'GET';
+      if (url === '/api/admin/upload-url' && method === 'POST') {
+        return new Response(
+          JSON.stringify({ mode: 'local', uploadEndpoint: '/api/admin/upload' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/upload' && method === 'POST') {
+        uploadIndex++;
+        return new Response(
+          JSON.stringify({ publicUrl: `/uploads/batch-${uploadIndex}.jpg` }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/memories' && method === 'POST') {
+        postedBody = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            memory: {
+              id: 'mem-album-created',
+              memoryDate: String(postedBody.memoryDate),
+              title: String(postedBody.title),
+              story: String(postedBody.story),
+              imageUrl: String(postedBody.imageUrl),
+              imageAlt: String(postedBody.imageAlt),
+              images: postedBody.images,
+              sortOrder: 1,
+              createdAt: '2026-11-17T00:00:00.000Z',
+            },
+          }),
+          { status: 201 }
+        );
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
+    });
+
+    const { container } = render(
+      <AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />
+    );
+
+    const f1 = new File([new Uint8Array([1])], 'trip-1.jpg', { type: 'image/jpeg' });
+    const f2 = new File([new Uint8Array([2])], 'trip-2.jpg', { type: 'image/jpeg' });
+    const f3 = new File([new Uint8Array([3])], 'trip-3.jpg', { type: 'image/jpeg' });
+
+    // Drag & drop 3 images AT ONCE onto memories-quick-dropzone
+    fireEvent.drop(screen.getByTestId('memories-quick-dropzone'), {
+      dataTransfer: { files: [f1, f2, f3] },
+    });
+
+    const albumGrid = await screen.findByTestId('memory-album-grid');
+    expect(within(albumGrid).getByText('trip-1.jpg')).toBeInTheDocument();
+    expect(within(albumGrid).getByText('trip-2.jpg')).toBeInTheDocument();
+    expect(within(albumGrid).getByText('trip-3.jpg')).toBeInTheDocument();
+    expect(within(albumGrid).getByText('Ảnh bìa')).toBeInTheDocument();
+
+    // Promote trip-2.jpg to cover (#1)
+    const makeCoverButtons = within(albumGrid).getAllByRole('button', { name: /Đặt làm bìa/i });
+    expect(makeCoverButtons).toHaveLength(2);
+    await user.click(makeCoverButtons[0]);
+
+    // Remove the 3rd photo (trip-3.jpg)
+    await user.click(within(albumGrid).getByRole('button', { name: /Xoá ảnh thứ 3/i }));
+    expect(within(albumGrid).queryByText('trip-3.jpg')).not.toBeInTheDocument();
+
+    // Verify main preview element remains unambiguous and Dark Velvet theme stays clean
+    expect(screen.getByRole('img', { name: /Xem trước ảnh/i })).toBeInTheDocument();
+    const classTokens = Array.from(container.querySelectorAll('[class]')).flatMap((el) =>
+      (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+    );
+    for (const token of classTokens) {
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+    }
+
+    await user.type(screen.getByLabelText(/Tiêu đề ngắn/i), 'Album Đà Lạt');
+    await user.type(screen.getByLabelText(/Câu chuyện/i), 'Hai bức ảnh nắng chiều.');
+    await user.click(screen.getByRole('button', { name: /Thêm vào dòng thời gian/i }));
+
+    expect(await screen.findByText('Album Đà Lạt')).toBeInTheDocument();
+    expect(screen.getByText('2 ảnh')).toBeInTheDocument();
+    expect(postedBody).not.toBeNull();
+    expect(postedBody!.imageUrl).toBe('/uploads/batch-1.jpg');
+    expect(postedBody!.images).toHaveLength(2);
+  });
+
+  test('Tab 1 supports uploading mixed photos and videos (.mp4/.mov) into a memory album, renders <video> previews, and submits mediaType video metadata', async () => {
+    const user = userEvent.setup();
+    let previewSeq = 0;
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => `blob:mixed-preview-${++previewSeq}`),
+      revokeObjectURL: vi.fn(),
+    });
+
+    const requestedUploadKinds: string[] = [];
+    let postedBody: Record<string, unknown> | null = null;
+
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method || 'GET';
+      if (url === '/api/admin/upload-url' && method === 'POST') {
+        const body = JSON.parse(String(init?.body || '{}')) as { kind?: string };
+        if (body.kind) requestedUploadKinds.push(body.kind);
+        return new Response(
+          JSON.stringify({ mode: 'local', uploadEndpoint: '/api/admin/upload' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/upload' && method === 'POST') {
+        const fd = init?.body as FormData;
+        const kind = fd.get('kind');
+        const publicUrl =
+          kind === 'video' ? '/uploads/sunset-moment.mp4' : '/uploads/photo-cover.jpg';
+        return new Response(JSON.stringify({ publicUrl }), { status: 200 });
+      }
+      if (url === '/api/admin/memories' && method === 'POST') {
+        postedBody = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            memory: {
+              id: 'mem-mixed-video',
+              memoryDate: String(postedBody.memoryDate),
+              title: String(postedBody.title),
+              story: String(postedBody.story),
+              imageUrl: String(postedBody.imageUrl),
+              imageAlt: String(postedBody.imageAlt),
+              images: postedBody.images,
+              sortOrder: 1,
+              createdAt: '2026-11-17T00:00:00.000Z',
+            },
+          }),
+          { status: 201 }
+        );
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected call' }), { status: 500 });
+    });
+
+    const { container } = render(
+      <AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />
+    );
+
+    const imgFile = new File([new Uint8Array([1, 2])], 'trip-1.jpg', { type: 'image/jpeg' });
+    const vidFile = new File([new Uint8Array([3, 4, 5])], 'sunset.mp4', { type: 'video/mp4' });
+
+    fireEvent.drop(screen.getByTestId('memories-quick-dropzone'), {
+      dataTransfer: { files: [imgFile, vidFile] },
+    });
+
+    const albumGrid = await screen.findByTestId('memory-album-grid');
+    expect(within(albumGrid).getByText('trip-1.jpg')).toBeInTheDocument();
+    expect(within(albumGrid).getByText('sunset.mp4')).toBeInTheDocument();
+    expect(albumGrid.querySelectorAll('video')).toHaveLength(1);
+
+    // Promote video to cover (#1) temporarily -> renders video preview in main dropzone preview
+    await user.click(within(albumGrid).getByRole('button', { name: /Đặt làm bìa/i }));
+    const dropzone = screen.getByTestId('memory-image-dropzone');
+    expect(dropzone.querySelector('video[controls]')).toBeInTheDocument();
+
+    // Move photo back to cover (#1)
+    await user.click(within(albumGrid).getByRole('button', { name: /Đặt làm bìa/i }));
+
+    // Theme check
+    const classTokens = Array.from(container.querySelectorAll('[class]')).flatMap((el) =>
+      (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+    );
+    for (const token of classTokens) {
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+    }
+
+    await user.type(screen.getByLabelText(/Tiêu đề ngắn/i), 'Hoàng hôn Phú Quốc');
+    await user.type(screen.getByLabelText(/Câu chuyện/i), 'Có ảnh và một đoạn video biển.');
+    await user.click(screen.getByRole('button', { name: /Thêm vào dòng thời gian/i }));
+
+    expect(await screen.findByText('Hoàng hôn Phú Quốc')).toBeInTheDocument();
+    expect(screen.getByText('1 ảnh · 1 video')).toBeInTheDocument();
+    expect(requestedUploadKinds).toEqual(['image', 'video']);
+    expect(postedBody).not.toBeNull();
+    expect(postedBody!.images).toEqual([
+      { url: '/uploads/photo-cover.jpg', alt: 'Hoàng hôn Phú Quốc' },
+      { url: '/uploads/sunset-moment.mp4', alt: 'Hoàng hôn Phú Quốc', mediaType: 'video' },
+    ]);
+  });
+
+  test('Tab 1 preserves dropped albumItems when typing into #memory-image-url and syncs cover alt two-way with #memory-alt', async () => {
+    const user = userEvent.setup();
+    let previewSeq = 0;
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => `blob:sync-preview-${++previewSeq}`),
+      revokeObjectURL: vi.fn(),
+    });
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    const fileA = new File([new Uint8Array([1, 2])], 'a.jpg', { type: 'image/jpeg' });
+    const fileB = new File([new Uint8Array([3, 4])], 'b.jpg', { type: 'image/jpeg' });
+    fireEvent.drop(screen.getByTestId('memories-quick-dropzone'), {
+      dataTransfer: { files: [fileA, fileB] },
+    });
+
+    const albumGrid = await screen.findByTestId('memory-album-grid');
+    expect(within(albumGrid).getByText('a.jpg')).toBeInTheDocument();
+    expect(within(albumGrid).getByText('b.jpg')).toBeInTheDocument();
+
+    // Typing into URL field (without clicking + Thêm URL) must NOT clear pending albumItems
+    const urlInput = screen.getByLabelText(/Đường dẫn ảnh \/ video/i);
+    await user.type(urlInput, 'https://example.com/extra.jpg');
+    expect(within(screen.getByTestId('memory-album-grid')).getByText('a.jpg')).toBeInTheDocument();
+    expect(within(screen.getByTestId('memory-album-grid')).getByText('b.jpg')).toBeInTheDocument();
+
+    // Editing #memory-alt syncs albumItems[0].alt
+    const coverAltInput = screen.getByLabelText(/Mô tả ảnh bìa/i);
+    await user.type(coverAltInput, 'Chú thích bìa mới');
+    expect(screen.getByLabelText('Chú thích ảnh thứ 1')).toHaveValue('Chú thích bìa mới');
+
+    // Editing albumItem[0].alt directly syncs #memory-alt
+    const item1AltInput = screen.getByLabelText('Chú thích ảnh thứ 1');
+    await user.clear(item1AltInput);
+    await user.type(item1AltInput, 'Sửa trực tiếp tấm 1');
+    expect(coverAltInput).toHaveValue('Sửa trực tiếp tấm 1');
+
+    // Editing albumItem[1].alt and clicking "Đặt làm bìa" promotes it to #1 and updates #memory-alt
+    const item2AltInput = screen.getByLabelText('Chú thích ảnh thứ 2');
+    await user.type(item2AltInput, 'Chú thích tấm 2');
+    await user.click(within(screen.getByTestId('memory-album-grid')).getByRole('button', { name: /Đặt làm bìa/i }));
+    expect(coverAltInput).toHaveValue('Chú thích tấm 2');
+    expect(screen.getByLabelText('Chú thích ảnh thứ 1')).toHaveValue('Chú thích tấm 2');
   });
 });

@@ -4,6 +4,8 @@ import path from 'node:path';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import AdminPage from '@/app/admin/page';
+import AdminLoginPage from '@/app/admin/login/page';
 import { POST as adminLoginPost } from '@/app/api/admin/login/route';
 import { POST as viewerLoginPost } from '@/app/api/viewer/login/route';
 import GlobalErrorPage from '@/app/error';
@@ -146,5 +148,23 @@ describe('Production startup & setup error handling', () => {
     fireEvent.click(retryBtn);
     expect(resetFn).toHaveBeenCalledTimes(1);
     expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple|slate)-|bg-white\b/);
+  });
+
+  test('AdminLoginPage and AdminPage render ProductionSetupNotice cleanly in production when ADMIN_SESSION_SECRET or ADMIN_PASSWORD is missing', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+    process.env.ADMIN_PASSWORD = 'MyStrongProdPassword!2026';
+    delete process.env.ADMIN_SESSION_SECRET;
+
+    const loginJsx = await AdminLoginPage();
+    const { unmount } = render(loginJsx);
+    expect(screen.getByRole('heading', { name: /Chưa hoàn tất cấu hình khởi động/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/ADMIN_SESSION_SECRET/).length).toBeGreaterThan(0);
+    unmount();
+
+    const adminJsx = await AdminPage();
+    render(adminJsx);
+    expect(screen.getByRole('heading', { name: /Chưa hoàn tất cấu hình khởi động/i })).toBeInTheDocument();
+    expect(errorSpy).toHaveBeenCalled();
   });
 });

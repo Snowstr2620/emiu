@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { verifyPasscode } from '@/lib/auth';
 import { computeTrafficSummary } from '@/lib/seed-data';
 import { LocalStorageRepository } from '@/lib/storage/local-repository';
@@ -493,5 +493,246 @@ describe('LocalStorageRepository', () => {
       failedAuthToday: 1,
       activeUsersCount: 0,
     });
+  }, 20000);
+
+  test('upgrades existing local-db.json lacking diaryEntries without losing data, supports dual-author diary CRUD sorted newest-first, and protects shared uploaded images', async () => {
+    // Seed initial DB then strip diaryEntries from disk to simulate upgrading current local-db.json
+    await repo.getPublicData();
+    const dbPath = path.join(dataDir, 'local-db.json');
+    const existingRaw = JSON.parse(fs.readFileSync(dbPath, 'utf8')) as Record<string, unknown>;
+    delete existingRaw.diaryEntries;
+    fs.writeFileSync(dbPath, JSON.stringify(existingRaw, null, 2), 'utf8');
+
+    const upgradedPub = await repo.getPublicData();
+    expect(upgradedPub.memories).toHaveLength(4);
+    expect(upgradedPub.diaryEntries).toEqual([]);
+
+    const sharedImg = await repo.saveLocalUpload({
+      fileName: 'shared-photo.jpg',
+      buffer: Buffer.from('shared-bytes'),
+    });
+    const exclusiveImg = await repo.saveLocalUpload({
+      fileName: 'diary-only.webp',
+      buffer: Buffer.from('exclusive-bytes'),
+    });
+    const sharedDiskPath = path.join(uploadDir, path.basename(sharedImg.publicUrl));
+    const exclusiveDiskPath = path.join(uploadDir, path.basename(exclusiveImg.publicUrl));
+
+    // Attach sharedImg to a memory first
+    await repo.createMemory({
+      memoryDate: '2026-11-16',
+      title: 'Kỷ niệm dùng chung ảnh',
+      story: 'Giữ ảnh này kể cả khi xoá nhật ký.',
+      imageUrl: sharedImg.publicUrl,
+      imageAlt: 'Ảnh chung',
+    });
+
+    const entryOlder = await repo.createDiaryEntry({
+      entryDate: '2026-11-16',
+      title: 'Nhật ký của Em',
+      content: 'Hôm nay đi ăn kem cùng anh vui lắm.',
+      mood: 'happy',
+      imageUrl: sharedImg.publicUrl,
+      imageAlt: 'Kem tối',
+      authorId: '00000000-0000-4000-8000-000000000002',
+      authorUsername: 'nguoithuong',
+      authorDisplayName: 'Em bé thương yêu',
+      authorRole: 'viewer',
+    });
+
+    const entryNewer = await repo.createDiaryEntry({
+      entryDate: '2026-11-17',
+      title: 'Nhật ký của Anh',
+      content: 'Nhìn em cười là hết mệt cả ngày dài.',
+      mood: 'loved',
+      imageUrl: exclusiveImg.publicUrl,
+      imageAlt: 'Nụ cười của em',
+      authorId: '00000000-0000-4000-8000-000000000001',
+      authorUsername: 'admin',
+      authorDisplayName: 'Anh',
+      authorRole: 'admin',
+    });
+
+    const listed = await repo.listDiaryEntries();
+    expect(listed.map((e) => e.id)).toEqual([entryNewer.id, entryOlder.id]);
+    expect((await repo.getDiaryEntryById(entryOlder.id))?.authorUsername).toBe('nguoithuong');
+    expect(await repo.isMediaUrlReferenced(sharedImg.publicUrl)).toBe(true);
+    expect(await repo.isMediaUrlReferenced('/uploads/non-existent.jpg')).toBe(false);
+
+    // Deleting diary entry that shares an image with a memory MUST keep sharedImg on disk
+    expect(await repo.deleteDiaryEntry(entryOlder.id)).toBe(true);
+    expect(fs.existsSync(sharedDiskPath)).toBe(true);
+
+    // Updating entryNewer to text-only cleans up unreferenced exclusiveImg on disk
+    const updatedNewer = await repo.updateDiaryEntry(entryNewer.id, {
+      entryDate: '2026-11-17',
+      title: 'Nhật ký của Anh (đã sửa)',
+      content: 'Chỉ giữ lại lời nhắn dịu dàng.',
+      mood: 'peaceful',
+      imageUrl: '',
+      imageAlt: '',
+    });
+    expect(updatedNewer?.title).toBe('Nhật ký của Anh (đã sửa)');
+    expect(updatedNewer?.mood).toBe('peaceful');
+    expect(updatedNewer?.authorUsername).toBe('admin');
+    expect(fs.existsSync(exclusiveDiskPath)).toBe(false);
+  });
+
+  test('serializes concurrent diary & activity writes across repository instances and retries transient Windows EPERM on rename', async () => {
+    await repo.getPublicData();
+    const secondRepoInstance = new LocalStorageRepository({ dataDir, uploadDir });
+
+    const realRenameSync = fs.renameSync;
+    let simulatedTransientFailure = false;
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation((oldPath, newPath) => {
+      if (!simulatedTransientFailure) {
+        simulatedTransientFailure = true;
+        const eperm = Object.assign(new Error('EPERM: operation not permitted, rename'), {
+          code: 'EPERM',
+        });
+        throw eperm;
+      }
+      return realRenameSync(oldPath, newPath);
+    });
+
+    try {
+      await Promise.all([
+        ...Array.from({ length: 4 }, (_, i) =>
+          repo.createDiaryEntry({
+            entryDate: '2026-11-17',
+            title: `Anh #${i}`,
+            content: `Bài viết song song của anh ${i}`,
+            mood: 'loved',
+            imageUrl: '',
+            imageAlt: '',
+            authorId: '00000000-0000-4000-8000-000000000001',
+            authorUsername: 'admin',
+            authorDisplayName: 'Anh',
+            authorRole: 'admin',
+          })
+        ),
+        ...Array.from({ length: 4 }, (_, i) =>
+          secondRepoInstance.createDiaryEntry({
+            entryDate: '2026-11-17',
+            title: `Em #${i}`,
+            content: `Bài viết song song của em ${i}`,
+            mood: 'happy',
+            imageUrl: '',
+            imageAlt: '',
+            authorId: '00000000-0000-4000-8000-000000000002',
+            authorUsername: 'nguoithuong',
+            authorDisplayName: 'Em',
+            authorRole: 'viewer',
+          })
+        ),
+        ...Array.from({ length: 4 }, (_, i) =>
+          secondRepoInstance.recordActivity({
+            userId: null,
+            username: 'nguoithuong',
+            userRole: 'viewer',
+            eventType: 'page_visit',
+            detail: `Truy cập đồng thời ${i}`,
+            deviceSummary: 'Safari · iPhone',
+          })
+        ),
+      ]);
+
+      expect(simulatedTransientFailure).toBe(true);
+      const entries = await repo.listDiaryEntries();
+      const logs = await repo.listActivityLogs({ limit: 50 });
+      expect(entries).toHaveLength(8);
+      expect(logs).toHaveLength(4);
+
+      const leftoverTmpFiles = fs.readdirSync(dataDir).filter((f) => f.endsWith('.tmp'));
+      expect(leftoverTmpFiles).toEqual([]);
+    } finally {
+      renameSpy.mockRestore();
+    }
+  });
+
+  test('upgrades legacy memories without images[], supports multi-photo album CRUD via getMemoryById, and deletes only dropped unreferenced photos', async () => {
+    // Seed initial DB then strip images[] from existing memory to simulate legacy local-db.json
+    const seedPub = await repo.getPublicData();
+    const firstId = seedPub.memories[0].id;
+    const dbPath = path.join(dataDir, 'local-db.json');
+    const rawDb = JSON.parse(fs.readFileSync(dbPath, 'utf8')) as {
+      memories: Array<Record<string, unknown>>;
+    };
+    delete rawDb.memories[0].images;
+    fs.writeFileSync(dbPath, JSON.stringify(rawDb, null, 2), 'utf8');
+
+    const upgradedMem = await repo.getMemoryById(firstId);
+    expect(upgradedMem?.images).toEqual([
+      {
+        url: upgradedMem!.imageUrl,
+        alt: upgradedMem!.imageAlt,
+      },
+    ]);
+
+    const p1 = await repo.saveLocalUpload({ fileName: 'album-1.jpg', buffer: Buffer.from('1') });
+    const p2 = await repo.saveLocalUpload({ fileName: 'album-2.jpg', buffer: Buffer.from('2') });
+    const p3 = await repo.saveLocalUpload({ fileName: 'album-3.jpg', buffer: Buffer.from('3') });
+    const sharedPhoto = await repo.saveLocalUpload({
+      fileName: 'shared-diary.jpg',
+      buffer: Buffer.from('shared'),
+    });
+
+    await repo.createDiaryEntry({
+      entryDate: '2026-11-17',
+      title: 'Nhật ký dùng chung ảnh',
+      content: 'Giữ ảnh này kể cả khi sửa/xoá album.',
+      mood: 'loved',
+      imageUrl: sharedPhoto.publicUrl,
+      imageAlt: 'Shared',
+      authorId: '00000000-0000-4000-8000-000000000001',
+      authorUsername: 'admin',
+      authorDisplayName: 'Anh',
+      authorRole: 'admin',
+    });
+
+    const createdAlbum = await repo.createMemory({
+      memoryDate: '2026-04-05',
+      title: 'Chuyến đi cùng em',
+      story: 'Album gồm 3 bức ảnh và 1 ảnh dùng chung.',
+      imageUrl: p1.publicUrl,
+      imageAlt: 'Bìa album',
+      images: [
+        { url: p1.publicUrl, alt: 'Bìa album' },
+        { url: p2.publicUrl, alt: 'Khoảnh khắc 2' },
+        { url: p3.publicUrl, alt: 'Khoảnh khắc 3' },
+        { url: sharedPhoto.publicUrl, alt: 'Ảnh dùng chung' },
+      ],
+    });
+
+    expect(createdAlbum.images).toHaveLength(4);
+    expect(createdAlbum.imageUrl).toBe(p1.publicUrl);
+    expect(await repo.isMediaUrlReferenced(p2.publicUrl)).toBe(true);
+    expect(await repo.isMediaUrlReferenced(p3.publicUrl)).toBe(true);
+
+    // Update album: reorder p2 as new cover, keep p3, drop p1 and sharedPhoto
+    const updatedAlbum = await repo.updateMemory(createdAlbum.id, {
+      memoryDate: '2026-04-05',
+      title: 'Chuyến đi cùng em (đổi bìa)',
+      story: 'Đổi ảnh 2 lên làm ảnh bìa.',
+      imageUrl: p2.publicUrl,
+      imageAlt: 'Bìa mới',
+      images: [
+        { url: p2.publicUrl, alt: 'Bìa mới' },
+        { url: p3.publicUrl, alt: 'Khoảnh khắc 3' },
+      ],
+    });
+
+    expect(updatedAlbum?.imageUrl).toBe(p2.publicUrl);
+    expect(updatedAlbum?.images).toHaveLength(2);
+    expect(fs.existsSync(path.join(uploadDir, path.basename(p1.publicUrl)))).toBe(false);
+    expect(fs.existsSync(path.join(uploadDir, path.basename(p2.publicUrl)))).toBe(true);
+    expect(fs.existsSync(path.join(uploadDir, path.basename(p3.publicUrl)))).toBe(true);
+    expect(fs.existsSync(path.join(uploadDir, path.basename(sharedPhoto.publicUrl)))).toBe(true);
+
+    // Delete album -> removes remaining p2 & p3
+    expect(await repo.deleteMemory(createdAlbum.id)).toBe(true);
+    expect(fs.existsSync(path.join(uploadDir, path.basename(p2.publicUrl)))).toBe(false);
+    expect(fs.existsSync(path.join(uploadDir, path.basename(p3.publicUrl)))).toBe(false);
+    expect(await repo.getMemoryById(createdAlbum.id)).toBeNull();
   });
 });

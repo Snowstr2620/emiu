@@ -14,7 +14,13 @@ export async function POST(request: Request) {
     const file = formData.get('file');
 
     const kind: UploadKind | null =
-      rawKind === 'audio' ? 'audio' : rawKind === 'image' ? 'image' : null;
+      rawKind === 'audio'
+        ? 'audio'
+        : rawKind === 'video'
+          ? 'video'
+          : rawKind === 'image'
+            ? 'image'
+            : null;
 
     if (!kind || !(file instanceof File)) {
       return NextResponse.json({ error: 'Thiếu tệp hoặc loại tệp không hợp lệ.' }, { status: 400 });
@@ -60,6 +66,13 @@ export async function DELETE(request: Request) {
     const url = typeof body?.url === 'string' ? body.url.trim() : '';
     if (!url) {
       return NextResponse.json({ error: 'Thiếu đường dẫn tệp cần dọn.' }, { status: 400 });
+    }
+
+    if (await repo.isMediaUrlReferenced(url)) {
+      return NextResponse.json(
+        { error: 'Không thể xoá tệp đang được tham chiếu.' },
+        { status: 409 }
+      );
     }
 
     await repo.deleteStoredFileByUrl(url);

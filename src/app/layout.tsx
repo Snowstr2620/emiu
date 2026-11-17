@@ -15,7 +15,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#080306',
+  themeColor: '#FFFBEB',
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -25,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className="min-h-screen antialiased bg-[#080306] text-rose-50 godly-velvet-bg selection:bg-rose-500/30 selection:text-rose-100">
+      <body className="min-h-[100dvh] antialiased bg-[#FFFBEB] text-stone-900 godly-velvet-bg selection:bg-red-200/70 selection:text-stone-900">
         {children}
       </body>
     </html>

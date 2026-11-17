@@ -10,10 +10,13 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 function createMockSupabaseClient(options?: {
   initialSettingsRow?: Record<string, unknown> | null;
   initialMemoryRows?: Record<string, unknown>[];
+  initialDiaryRows?: Record<string, unknown>[];
   initialUserRows?: Record<string, unknown>[];
   initialActivityRows?: Record<string, unknown>[];
   failSeedMemoriesError?: string | null;
   failReorderOnIndex?: number | null;
+  missingDiaryTable?: boolean;
+  missingImagesColumn?: boolean;
 }) {
   const seed = createInitialSeedData();
   let settingsRow: Record<string, unknown> | null =
@@ -65,6 +68,7 @@ function createMockSupabaseClient(options?: {
     }));
 
   let activityRows: Record<string, unknown>[] = options?.initialActivityRows ?? [];
+  let diaryRows: Record<string, unknown>[] = options?.initialDiaryRows ?? [];
 
   const calls: string[] = [];
   const removedPaths: string[][] = [];
@@ -72,20 +76,26 @@ function createMockSupabaseClient(options?: {
 
   function makeSelectFilterBuilder(rowsGetter: () => Record<string, unknown>[]) {
     const filters: Array<{ col: string; val: unknown }> = [];
-    let orderCol: string | null = null;
-    let orderAsc = true;
+    const orders: Array<{ col: string; asc: boolean }> = [];
     let limitCount: number | null = null;
 
     const execute = () => {
       let result = [...rowsGetter()].filter((row) =>
         filters.every((f) => row[f.col] === f.val)
       );
-      if (orderCol) {
-        const col = orderCol;
+      if (orders.length > 0) {
         result.sort((a, b) => {
-          const av = String(a[col] ?? '');
-          const bv = String(b[col] ?? '');
-          return orderAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+          for (const ord of orders) {
+            const av = a[ord.col];
+            const bv = b[ord.col];
+            if (typeof av === 'number' && typeof bv === 'number') {
+              if (av !== bv) return ord.asc ? av - bv : bv - av;
+            } else {
+              const cmp = String(av ?? '').localeCompare(String(bv ?? ''));
+              if (cmp !== 0) return ord.asc ? cmp : -cmp;
+            }
+          }
+          return 0;
         });
       }
       if (limitCount !== null) {
@@ -100,8 +110,7 @@ function createMockSupabaseClient(options?: {
         return builder;
       },
       order(col: string, opts?: { ascending?: boolean }) {
-        orderCol = col;
-        orderAsc = opts?.ascending ?? true;
+        orders.push({ col, asc: opts?.ascending ?? true });
         return builder;
       },
       limit(count: number) {
@@ -180,26 +189,38 @@ function createMockSupabaseClient(options?: {
 
       if (table === 'memories') {
         return {
-          select(cols?: string, opts?: { count?: string; head?: boolean }) {
+          select(_cols?: string, opts?: { count?: string; head?: boolean }) {
             if (opts?.head) {
               return Promise.resolve({ count: memoryRows.length, error: null });
             }
-            if (cols === 'image_url') {
-              return makeSelectFilterBuilder(() => memoryRows);
+            return makeSelectFilterBuilder(() => memoryRows);
+          },
+          insert(row: Record<string, unknown>) {
+            if (options?.missingImagesColumn && 'images' in row) {
+              return {
+                select() {
+                  return {
+                    single: async () => ({
+                      data: null,
+                      error: {
+                        code: '42703',
+                        message: 'column memories.images does not exist',
+                      },
+                    }),
+                  };
+                },
+              };
             }
+            const inserted = {
+              id: row.id || crypto.randomUUID(),
+              created_at: new Date().toISOString(),
+              ...row,
+            };
+            memoryRows.push(inserted);
             return {
-              order() {
+              select() {
                 return {
-                  order() {
-                    return {
-                      returns: async () => ({
-                        data: [...memoryRows].sort(
-                          (a, b) => Number(a.sort_order) - Number(b.sort_order)
-                        ),
-                        error: null,
-                      }),
-                    };
-                  },
+                  single: async () => ({ data: inserted, error: null }),
                 };
               },
             };
@@ -227,15 +248,46 @@ function createMockSupabaseClient(options?: {
           },
           update(patch: Record<string, unknown>) {
             return {
-              eq: async (_col: string, id: string) => {
-                const idx = updateCallCount++;
-                if (options?.failReorderOnIndex === idx) {
-                  return { error: { message: 'Simulated update failure' } };
+              eq(_col: string, id: string) {
+                const missingImgErr =
+                  options?.missingImagesColumn && 'images' in patch
+                    ? { code: '42703', message: 'column memories.images does not exist' }
+                    : null;
+                let updatedRow: Record<string, unknown> | null = null;
+                if (!missingImgErr) {
+                  const idx = updateCallCount++;
+                  if (options?.failReorderOnIndex === idx) {
+                    const failErr = { message: 'Simulated update failure' };
+                    return {
+                      select() {
+                        return { single: async () => ({ data: null, error: failErr }) };
+                      },
+                      then(resolve: (res: { error: typeof failErr }) => void) {
+                        resolve({ error: failErr });
+                      },
+                    };
+                  }
+                  memoryRows = memoryRows.map((row) => {
+                    if (row.id === id) {
+                      updatedRow = { ...row, ...patch };
+                      return updatedRow;
+                    }
+                    return row;
+                  });
                 }
-                memoryRows = memoryRows.map((row) =>
-                  row.id === id ? { ...row, ...patch } : row
-                );
-                return { error: null };
+                return {
+                  select() {
+                    return {
+                      single: async () => ({
+                        data: missingImgErr ? null : updatedRow,
+                        error: missingImgErr,
+                      }),
+                    };
+                  },
+                  then(resolve: (res: { error: typeof missingImgErr }) => void) {
+                    resolve({ error: missingImgErr });
+                  },
+                };
               },
             };
           },
@@ -334,6 +386,83 @@ function createMockSupabaseClient(options?: {
                 return {
                   single: async () => ({ data: inserted, error: null }),
                 };
+              },
+            };
+          },
+        };
+      }
+
+      if (table === 'diary_entries') {
+        const missingErr = {
+          code: '42P01',
+          message: 'relation "public.diary_entries" does not exist',
+        };
+        return {
+          select() {
+            if (options?.missingDiaryTable) {
+              const errBuilder = {
+                eq: () => errBuilder,
+                order: () => errBuilder,
+                limit: () => errBuilder,
+                maybeSingle: async () => ({ data: null, error: missingErr }),
+                returns: async () => ({ data: null, error: missingErr }),
+              };
+              return errBuilder;
+            }
+            return makeSelectFilterBuilder(() => diaryRows);
+          },
+          insert(row: Record<string, unknown>) {
+            if (options?.missingDiaryTable) {
+              return {
+                select() {
+                  return {
+                    single: async () => ({ data: null, error: missingErr }),
+                  };
+                },
+              };
+            }
+            const nowIso = new Date().toISOString();
+            const inserted = {
+              id: row.id || crypto.randomUUID(),
+              created_at: nowIso,
+              updated_at: nowIso,
+              ...row,
+            };
+            diaryRows.push(inserted);
+            return {
+              select() {
+                return {
+                  single: async () => ({ data: inserted, error: null }),
+                };
+              },
+            };
+          },
+          update(patch: Record<string, unknown>) {
+            return {
+              eq(col: string, val: unknown) {
+                let updatedRow: Record<string, unknown> | null = null;
+                diaryRows = diaryRows.map((row) => {
+                  if (row[col] === val) {
+                    updatedRow = { ...row, ...patch };
+                    return updatedRow;
+                  }
+                  return row;
+                });
+                return {
+                  select() {
+                    return {
+                      single: async () => ({ data: updatedRow, error: null }),
+                    };
+                  },
+                };
+              },
+            };
+          },
+          delete() {
+            return {
+              eq: async (col: string, val: unknown) => {
+                diaryRows = diaryRows.filter((row) => row[col] !== val);
+                return { error: null };
               },
             };
           },
@@ -728,5 +857,182 @@ describe('SupabaseStorageRepository', () => {
       })
     ).toBeNull();
     expect(await notFoundRepo.deleteMemory(validUuid)).toBe(false);
+  });
+
+  test('supports diary_entries CRUD, shared Storage object protection, and graceful 42P01 fallback when diary_entries table is not yet created', async () => {
+    const sharedCloudUrl =
+      'https://example.supabase.co/storage/v1/object/public/love-memories/image/shared-pic.jpg';
+    const diaryOnlyCloudUrl =
+      'https://example.supabase.co/storage/v1/object/public/love-memories/image/diary-only.jpg';
+
+    const mock = createMockSupabaseClient({
+      initialMemoryRows: [
+        {
+          id: '11111111-1111-4111-8111-111111111101',
+          memory_date: '2026-11-15',
+          title: 'Kỷ niệm dùng ảnh chung',
+          story: 'Ảnh chung trên cloud',
+          image_url: sharedCloudUrl,
+          image_alt: 'Ảnh chung',
+          sort_order: 0,
+          created_at: '2026-11-15T00:00:00.000Z',
+        },
+      ],
+    });
+    const repo = new SupabaseStorageRepository({
+      client: mock.client,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+
+    const d1 = await repo.createDiaryEntry({
+      entryDate: '2026-11-16',
+      title: 'Ngày của Em',
+      content: 'Thương anh thật nhiều.',
+      mood: 'miss_you',
+      imageUrl: sharedCloudUrl,
+      imageAlt: 'Ảnh chung',
+      authorId: '00000000-0000-4000-8000-000000000002',
+      authorUsername: 'nguoithuong',
+      authorDisplayName: 'Em bé',
+      authorRole: 'viewer',
+    });
+    const d2 = await repo.createDiaryEntry({
+      entryDate: '2026-11-17',
+      title: 'Ngày của Anh',
+      content: 'Hẹn em cuối tuần đi dạo nhé.',
+      mood: 'excited',
+      imageUrl: diaryOnlyCloudUrl,
+      imageAlt: 'Ảnh riêng nhật ký',
+      authorId: '00000000-0000-4000-8000-000000000001',
+      authorUsername: 'admin',
+      authorDisplayName: 'Anh',
+      authorRole: 'admin',
+    });
+
+    expect((await repo.getPublicData()).diaryEntries?.map((e) => e.id)).toEqual([d2.id, d1.id]);
+    expect(await repo.isMediaUrlReferenced(sharedCloudUrl)).toBe(true);
+    expect(await repo.isMediaUrlReferenced(diaryOnlyCloudUrl)).toBe(true);
+
+    // Deleting d1 MUST NOT remove sharedCloudUrl from Storage because memory still uses it
+    expect(await repo.deleteDiaryEntry(d1.id)).toBe(true);
+    expect(mock.removedPaths).toEqual([]);
+
+    // Updating d2 to remove diaryOnlyCloudUrl removes image/diary-only.jpg from Storage
+    const updatedD2 = await repo.updateDiaryEntry(d2.id, {
+      entryDate: '2026-11-17',
+      title: 'Ngày của Anh (cập nhật)',
+      content: 'Hẹn em tối nay luôn.',
+      mood: 'happy',
+      imageUrl: '',
+      imageAlt: '',
+    });
+    expect(updatedD2?.title).toBe('Ngày của Anh (cập nhật)');
+    expect(mock.removedPaths).toEqual([['image/diary-only.jpg']]);
+
+    // Missing table 42P01 degrades gracefully on read and gives actionable error on write
+    const unmigratedMock = createMockSupabaseClient({ missingDiaryTable: true });
+    const unmigratedRepo = new SupabaseStorageRepository({
+      client: unmigratedMock.client,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+    expect((await unmigratedRepo.getPublicData()).diaryEntries).toEqual([]);
+    expect((await unmigratedRepo.getAdminData()).diaryEntries).toEqual([]);
+    await expect(
+      unmigratedRepo.createDiaryEntry({
+        entryDate: '2026-11-17',
+        title: '',
+        content: 'Thử ghi khi chưa chạy SQL',
+        mood: 'loved',
+        imageUrl: '',
+        imageAlt: '',
+        authorId: null,
+        authorUsername: 'admin',
+        authorDisplayName: 'Anh',
+        authorRole: 'admin',
+      })
+    ).rejects.toThrow(/supabase\/schema\.sql/);
+  });
+
+  test('supports multi-photo album CRUD, getMemoryById, multi-image reference checks, Storage orphan cleanup, and 42703 column fallback', async () => {
+    const u1 = 'https://example.supabase.co/storage/v1/object/public/love-memories/image/a1.jpg';
+    const u2 = 'https://example.supabase.co/storage/v1/object/public/love-memories/image/a2.jpg';
+    const u3 = 'https://example.supabase.co/storage/v1/object/public/love-memories/image/a3.jpg';
+
+    const mock = createMockSupabaseClient({ initialMemoryRows: [] });
+    const repo = new SupabaseStorageRepository({
+      client: mock.client,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+
+    const album = await repo.createMemory({
+      memoryDate: '2026-04-05',
+      title: 'Album cloud',
+      story: 'Ba bức ảnh trên cloud.',
+      imageUrl: u1,
+      imageAlt: 'Bìa',
+      images: [
+        { url: u1, alt: 'Bìa' },
+        { url: u2, alt: 'Ảnh 2' },
+        { url: u3, alt: 'Ảnh 3' },
+      ],
+    });
+
+    expect(album.images).toHaveLength(3);
+    expect((await repo.getMemoryById(album.id))?.images?.map((i) => i.url)).toEqual([u1, u2, u3]);
+    expect(await repo.isMediaUrlReferenced(u2)).toBe(true);
+    expect(await repo.isMediaUrlReferenced(u3)).toBe(true);
+
+    // Update album dropping u1 -> removes image/a1.jpg while keeping u2 & u3
+    const updated = await repo.updateMemory(album.id, {
+      memoryDate: '2026-04-05',
+      title: 'Album cloud (cập nhật)',
+      story: 'Chỉ giữ ảnh 2 và 3.',
+      imageUrl: u2,
+      imageAlt: 'Bìa 2',
+      images: [
+        { url: u2, alt: 'Bìa 2' },
+        { url: u3, alt: 'Ảnh 3' },
+      ],
+    });
+    expect(updated?.images).toHaveLength(2);
+    expect(mock.removedPaths).toEqual([['image/a1.jpg']]);
+
+    // Delete album -> removes u2 and u3
+    expect(await repo.deleteMemory(album.id)).toBe(true);
+    expect(mock.removedPaths).toEqual([['image/a1.jpg'], ['image/a2.jpg'], ['image/a3.jpg']]);
+
+    // Missing images column fallback: 1-photo succeeds via image_url/image_alt, >=2 photos throws actionable SQL error
+    const unmigratedClient = createMockSupabaseClient({ missingImagesColumn: true });
+    const unmigratedRepo = new SupabaseStorageRepository({
+      client: unmigratedClient.client,
+      supabaseUrl: 'https://example.supabase.co',
+      bucket: 'love-memories',
+    });
+    const singleFallback = await unmigratedRepo.createMemory({
+      memoryDate: '2026-04-05',
+      title: '1 ảnh',
+      story: 'Fallback tương thích ngược.',
+      imageUrl: u1,
+      imageAlt: 'Ảnh 1',
+      images: [{ url: u1, alt: 'Ảnh 1' }],
+    });
+    expect(singleFallback.images).toEqual([{ url: u1, alt: 'Ảnh 1' }]);
+
+    await expect(
+      unmigratedRepo.createMemory({
+        memoryDate: '2026-04-05',
+        title: 'Nhiều ảnh',
+        story: 'Chưa nâng cấp cột images.',
+        imageUrl: u1,
+        imageAlt: 'Ảnh 1',
+        images: [
+          { url: u1, alt: 'Ảnh 1' },
+          { url: u2, alt: 'Ảnh 2' },
+        ],
+      })
+    ).rejects.toThrow(/supabase\/schema\.sql/);
   });
 });

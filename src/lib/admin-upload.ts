@@ -1,4 +1,5 @@
 import { compressImageIfNeeded } from '@/lib/image-compress';
+import { isVideoFile } from '@/lib/memory-album';
 import type { UploadKind } from '@/lib/validation';
 
 interface SignedUploadResponse {
@@ -14,13 +15,21 @@ interface LocalUploadResponse {
   uploadEndpoint: string;
 }
 
+export interface UploadMediaOptions {
+  uploadUrlEndpoint?: string;
+}
+
 export class UploadAuthError extends Error {
   readonly status = 401;
 
-  constructor(message: string = 'Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.') {
+  constructor(message: string = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.') {
     super(message);
     this.name = 'UploadAuthError';
   }
+}
+
+export function inferVisualUploadKind(file: File): 'image' | 'video' {
+  return isVideoFile(file) ? 'video' : 'image';
 }
 
 function inferMimeType(file: File): string {
@@ -31,17 +40,25 @@ function inferMimeType(file: File): string {
   if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.gif')) return 'image/gif';
   if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) return 'video/mp4';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
   if (lower.endsWith('.mp3')) return 'audio/mpeg';
   if (lower.endsWith('.m4a')) return 'audio/mp4';
   if (lower.endsWith('.wav')) return 'audio/wav';
   return '';
 }
 
-export async function uploadMediaFile(file: File, kind: UploadKind): Promise<string> {
+export async function uploadMediaFile(
+  file: File,
+  kind: UploadKind,
+  options?: UploadMediaOptions
+): Promise<string> {
   const processed = kind === 'image' ? await compressImageIfNeeded(file) : file;
   const mimeType = inferMimeType(processed);
+  const uploadUrlEndpoint = options?.uploadUrlEndpoint || '/api/admin/upload-url';
 
-  const prepRes = await fetch('/api/admin/upload-url', {
+  const prepRes = await fetch(uploadUrlEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -102,7 +119,7 @@ export async function uploadMediaFile(file: File, kind: UploadKind): Promise<str
       if (localRes.status === 401) {
         throw new UploadAuthError(localPayload.error);
       }
-      throw new Error(localPayload.error || 'Không thể lưu tệp vào thư mục cục bộ.');
+      throw new Error(localPayload.error || 'Không thể lưu tệp vào thư mục máy chủ.');
     }
 
     return localPayload.publicUrl;
@@ -111,9 +128,12 @@ export async function uploadMediaFile(file: File, kind: UploadKind): Promise<str
   throw new Error('Phản hồi máy chủ tải tệp không hợp lệ.');
 }
 
-export async function cleanupUploadedUrl(url: string): Promise<void> {
+export async function cleanupUploadedUrl(
+  url: string,
+  cleanupEndpoint: string = '/api/admin/upload'
+): Promise<void> {
   if (!url) return;
-  await fetch('/api/admin/upload', {
+  await fetch(cleanupEndpoint, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),

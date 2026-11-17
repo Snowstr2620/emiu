@@ -4,8 +4,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MotionConfig } from 'framer-motion';
-import { Heart, LogOut, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { BookOpen, Heart, LogOut, Menu, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { AudioToggle } from '@/components/story/AudioToggle';
+import { DailyDiarySection } from '@/components/story/DailyDiarySection';
 import { EnvelopeLetter } from '@/components/story/EnvelopeLetter';
 import { HeroSection } from '@/components/story/HeroSection';
 import { LoveEffectsLayer } from '@/components/story/LoveEffectsLayer';
@@ -14,7 +15,9 @@ import { PhotoLightbox } from '@/components/story/PhotoLightbox';
 import { PixelHeartIntro } from '@/components/story/PixelHeartIntro';
 import { calculateDaysTogether } from '@/lib/date-utils';
 import { useModalFocusTrap } from '@/lib/useModalFocusTrap';
-import type { ActivityEventType, PublicSiteData, SafeAppUser } from '@/types/memories';
+import type { ActivityEventType, DiaryEntry, PublicSiteData, SafeAppUser } from '@/types/memories';
+
+const EMPTY_DIARY_ENTRIES: DiaryEntry[] = [];
 
 interface StoryExperienceProps {
   data: PublicSiteData;
@@ -79,14 +82,19 @@ export function StoryExperience({
   const routerRef = useRef(router);
   routerRef.current = router;
   const { settings, memories } = data;
+  const initialDiaryEntries = data.diaryEntries ?? EMPTY_DIARY_ENTRIES;
+  const [activeSection, setActiveSection] = useState<'story' | 'diary'>('story');
+  const [diaryCount, setDiaryCount] = useState<number>(initialDiaryEntries.length);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showHeartModal, setShowHeartModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  useEffect(() => {
+    setDiaryCount((data.diaryEntries ?? []).length);
+  }, [data.diaryEntries]);
+
   const hasSentLeaveRef = useRef(false);
-  const isPlayingRef = useRef(isPlaying);
-  isPlayingRef.current = isPlaying;
   const heartModalRef = useRef<HTMLDivElement | null>(null);
   const heartCloseButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -152,17 +160,18 @@ export function StoryExperience({
   }, [visitStorageKey, currentUserId, trackActivity]);
 
   useEffect(() => {
-    if (!showHeartModal) return;
+    if (!showHeartModal && !mobileMenuOpen) return;
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setShowHeartModal(false);
+        if (showHeartModal) setShowHeartModal(false);
+        if (mobileMenuOpen) setMobileMenuOpen(false);
       }
     }
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [showHeartModal]);
+  }, [showHeartModal, mobileMenuOpen]);
 
   const handleStartJourney = useCallback(() => {
     const timelineEl = document.getElementById('timeline');
@@ -172,20 +181,7 @@ export function StoryExperience({
         window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       timelineEl.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth' });
     }
-    if (settings.musicEnabled && settings.musicUrl && !isPlayingRef.current) {
-      setIsPlaying(true);
-      trackActivity('music_toggled', 'Bật giai điệu nền dịu dàng');
-    }
-  }, [settings.musicEnabled, settings.musicUrl, trackActivity]);
-
-  const handleToggleMusic = useCallback(() => {
-    const nextState = !isPlayingRef.current;
-    setIsPlaying(nextState);
-    trackActivity(
-      'music_toggled',
-      nextState ? 'Bật giai điệu nền dịu dàng' : 'Tạm dừng nhạc nền'
-    );
-  }, [trackActivity]);
+  }, []);
 
   const handleOpenPhoto = useCallback(
     (index: number) => {
@@ -214,6 +210,7 @@ export function StoryExperience({
   const handleLogout = useCallback(async () => {
     if (loggingOut) return;
     setLoggingOut(true);
+    setMobileMenuOpen(false);
     hasSentLeaveRef.current = true;
     try {
       await fetch('/api/viewer/logout', { method: 'POST' }).catch(() => {});
@@ -234,116 +231,265 @@ export function StoryExperience({
     (currentUser?.role === 'admin' ? 'Anh · Quản trị' : 'Em bé thương yêu');
 
   const showLogoutButton = Boolean(currentUser) || Boolean(viewerPasscodeEnabled);
+  const hasAccountMenu = Boolean(currentUser) || showLogoutButton;
+
+  function handleBrandClick() {
+    setActiveSection('story');
+    setMobileMenuOpen(false);
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      const prefersReducedMotion =
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+    }
+  }
+
+  // Swapping tabs replaces the whole <main> content, so keeping the old scroll offset would
+  // drop the reader mid-way into the new section (hiding its heading & primary CTA).
+  function handleSectionChange(section: 'story' | 'diary') {
+    setActiveSection(section);
+    setMobileMenuOpen(false);
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="relative min-h-screen overflow-x-hidden bg-[#080306] text-rose-50">
+      <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#FFFBEB] text-stone-900">
         <LoveEffectsLayer />
 
-        {/* Luminous crimson & rose velvet atmosphere orbs */}
+        {/* Warm sunlit butter-yellow & crimson-blush atmosphere orbs */}
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed -left-24 -top-24 h-80 w-80 rounded-full bg-red-600/20 blur-3xl sm:h-[28rem] sm:w-[28rem]"
+          className="pointer-events-none fixed -left-24 -top-24 h-80 w-80 rounded-full bg-amber-200/45 blur-3xl sm:h-[28rem] sm:w-[28rem]"
         />
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed -right-24 top-1/3 h-80 w-80 rounded-full bg-rose-500/15 blur-3xl sm:h-[30rem] sm:w-[30rem]"
+          className="pointer-events-none fixed -right-24 top-1/3 h-80 w-80 rounded-full bg-yellow-200/45 blur-3xl sm:h-[30rem] sm:w-[30rem]"
         />
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed bottom-0 left-1/3 h-72 w-72 rounded-full bg-pink-600/15 blur-3xl"
+          className="pointer-events-none fixed bottom-0 left-1/3 h-72 w-72 rounded-full bg-red-200/30 blur-3xl"
         />
 
-        {/* Unified Godly floating pill dock */}
-        <div className="pointer-events-none fixed inset-x-0 top-0 z-40 flex flex-wrap items-center gap-1.5 px-3 pt-3 sm:gap-2 sm:px-6 sm:pt-5">
-          {currentUser && (
-            <div className="pointer-events-auto order-1 glass-pill inline-flex min-h-[36px] max-w-full items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-rose-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
-              <span
-                aria-hidden="true"
-                className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse motion-reduce:animate-none"
-              />
-              <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400 sm:h-3.5 sm:w-3.5" />
-              <span className="max-w-[130px] truncate sm:max-w-[160px] md:max-w-[180px] lg:max-w-[220px]">
-                {roleLabel}
-              </span>
-            </div>
-          )}
-
-          {settings.musicEnabled && settings.musicUrl && (
-            <div className="pointer-events-auto order-2 ml-auto shrink-0 sm:order-last">
-              <AudioToggle
-                inline
-                musicUrl={settings.musicUrl}
-                musicEnabled={settings.musicEnabled}
-                isPlaying={isPlaying}
-                onToggle={handleToggleMusic}
-                onSyncPlayState={setIsPlaying}
-              />
-            </div>
-          )}
-
+        {/* Mobile drawer scrim */}
+        {mobileMenuOpen && (
           <div
-            className={`pointer-events-auto flex flex-wrap items-center gap-1.5 sm:order-2 sm:gap-2 ${
-              currentUser ? 'order-3' : 'order-1'
-            }`}
-          >
-            {currentUser?.role === 'admin' && (
-              <Link
-                href="/admin"
-                className="glass-pill inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-rose-200 transition hover:border-red-400/55 hover:text-white sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
-              >
-                <ShieldCheck className="h-3 w-3 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
-                <span>Quản trị</span>
-              </Link>
-            )}
+            aria-hidden="true"
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 z-30 bg-stone-950/35 backdrop-blur-sm lg:hidden"
+          />
+        )}
 
+        {/* Unified sunlit Top App Bar + Responsive Primary Navigation */}
+        <div
+          data-testid="story-topbar"
+          className="fixed inset-x-0 top-0 z-40 pt-[env(safe-area-inset-top)]"
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 border-b border-amber-300/75 bg-[#FFFBEB]/90 shadow-[0_6px_24px_rgba(120,53,15,0.06)] backdrop-blur-xl"
+          />
+          <div className="mx-auto flex h-14 max-w-6xl 2xl:max-w-7xl items-center justify-between gap-2 px-3 sm:h-16 sm:px-6">
+            {/* Brand Identity */}
             <button
               type="button"
-              onClick={handleOpenHeartReplay}
-              aria-label="Ngắm lại trái tim pixel"
-              className="glass-pill inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-rose-200 transition hover:border-rose-400/50 hover:text-white sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
+              onClick={handleBrandClick}
+              className="inline-flex min-h-[44px] min-w-0 shrink items-center gap-2 rounded-2xl px-1.5 py-1 text-left transition hover:bg-amber-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             >
-              <Sparkles className="h-3 w-3 shrink-0 text-rose-400 sm:h-3.5 sm:w-3.5" />
-              <span>Trái tim</span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-red-50 shadow-sm">
+                <Heart aria-hidden="true" className="h-4 w-4 fill-red-500 text-red-500" />
+              </span>
+              <span className="max-w-[140px] truncate font-serif text-base font-bold text-stone-900 sm:max-w-[180px] sm:text-lg">
+                {settings.coupleTitle}
+              </span>
             </button>
 
-            {showLogoutButton && (
+            {/* Primary Nav: Fixed Bottom Tab Bar on Mobile (< md) -> Centered Inline Pill Bar on Desktop/Tablet (md+) */}
+            <nav
+              aria-label="Điều hướng chính"
+              data-testid="story-primary-nav"
+              className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t border-amber-300/85 bg-[#FFFDF5]/95 px-2.5 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_28px_rgba(120,53,15,0.08)] backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:z-auto md:inline-flex md:w-auto md:shrink-0 md:items-center md:gap-1 md:rounded-full md:border md:border-amber-300/80 md:bg-[#FFFDF5]/95 md:p-1 md:shadow-[0_8px_24px_rgba(120,53,15,0.08)]"
+            >
               <button
                 type="button"
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="glass-pill inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-rose-200/85 transition hover:border-red-400/50 hover:text-white disabled:opacity-60 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs"
+                aria-pressed={activeSection === 'story'}
+                onClick={() => handleSectionChange('story')}
+                className={`inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-1.5 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 md:min-h-[36px] md:flex-row md:gap-1.5 md:rounded-full md:px-3 md:py-1.5 md:text-xs ${
+                  activeSection === 'story'
+                    ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-[0_6px_18px_rgba(220,38,38,0.28)]'
+                    : 'text-stone-700 hover:text-stone-950'
+                }`}
               >
-                <LogOut className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
-                <span>Đăng xuất</span>
+                <Heart
+                  aria-hidden="true"
+                  className={`h-4 w-4 shrink-0 md:h-3.5 md:w-3.5 ${
+                    activeSection === 'story'
+                      ? 'fill-white text-white'
+                      : 'fill-red-500 text-red-500'
+                  }`}
+                />
+                <span>
+                  Hành trình<span className="hidden 2xl:inline"> kỷ niệm</span>
+                </span>
               </button>
-            )}
+
+              <button
+                type="button"
+                aria-pressed={activeSection === 'diary'}
+                onClick={() => handleSectionChange('diary')}
+                className={`inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-1.5 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 md:min-h-[36px] md:flex-row md:gap-1.5 md:rounded-full md:px-3 md:py-1.5 md:text-xs ${
+                  activeSection === 'diary'
+                    ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-[0_6px_18px_rgba(220,38,38,0.28)]'
+                    : 'text-stone-700 hover:text-stone-950'
+                }`}
+              >
+                <BookOpen
+                  aria-hidden="true"
+                  className={`h-4 w-4 shrink-0 md:h-3.5 md:w-3.5 ${
+                    activeSection === 'diary' ? 'text-white' : 'text-red-600'
+                  }`}
+                />
+                <span>
+                  Nhật ký<span className="hidden 2xl:inline"> mỗi ngày</span>
+                  {diaryCount > 0 ? ` (${diaryCount})` : ''}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleOpenHeartReplay();
+                }}
+                aria-label="Ngắm lại trái tim pixel"
+                className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-1.5 text-[11px] font-semibold text-stone-700 transition hover:bg-amber-100/75 hover:text-stone-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 md:min-h-[36px] md:flex-row md:gap-1.5 md:rounded-full md:px-3 md:py-1.5 md:text-xs"
+              >
+                <Sparkles
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 text-red-600 md:h-3.5 md:w-3.5"
+                />
+                <span>Trái tim</span>
+              </button>
+            </nav>
+
+            {/* Right Controls: Always-On Ambient Music Pill + Mobile Drawer Trigger + Desktop Account Bar */}
+            <div className="flex shrink-0 items-center gap-2">
+              <AudioToggle inline musicUrl={settings.musicUrl} />
+
+              {hasAccountMenu && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={mobileMenuOpen ? 'Đóng menu tài khoản' : 'Mở menu tài khoản'}
+                    aria-expanded={mobileMenuOpen}
+                    aria-controls="story-account-menu"
+                    onClick={() => setMobileMenuOpen((v) => !v)}
+                    className="glass-pill inline-flex h-11 w-11 items-center justify-center rounded-full text-stone-800 transition hover:border-red-300 hover:text-stone-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 lg:hidden"
+                  >
+                    {mobileMenuOpen ? (
+                      <X aria-hidden="true" className="h-5 w-5" />
+                    ) : (
+                      <Menu aria-hidden="true" className="h-5 w-5" />
+                    )}
+                  </button>
+
+                  <div
+                    id="story-account-menu"
+                    data-testid="story-account-menu"
+                    className={
+                      mobileMenuOpen
+                        ? 'fixed inset-x-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.5rem)] z-50 flex flex-col gap-2 rounded-3xl border border-amber-300/85 bg-[#FFFDF5]/95 p-4 shadow-[0_20px_48px_rgba(120,53,15,0.18)] backdrop-blur-xl lg:static lg:inset-auto lg:z-auto lg:flex lg:flex-row lg:items-center lg:gap-2 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none'
+                        : 'hidden lg:flex lg:items-center lg:gap-2'
+                    }
+                  >
+                    {currentUser && (
+                      <div className="glass-pill inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-stone-900 lg:min-h-[36px] lg:rounded-full lg:px-3 lg:py-1.5">
+                        <span
+                          aria-hidden="true"
+                          className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_8px_rgba(220,38,38,0.65)] animate-pulse motion-reduce:animate-none"
+                        />
+                        <Heart
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 shrink-0 fill-red-500 text-red-500"
+                        />
+                        <span className="truncate lg:max-w-[130px] 2xl:max-w-[200px]">
+                          {roleLabel}
+                        </span>
+                      </div>
+                    )}
+
+                    {currentUser?.role === 'admin' && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="glass-pill inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-stone-800 transition hover:border-red-300 hover:bg-amber-100/70 hover:text-stone-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 lg:min-h-[36px] lg:rounded-full lg:px-3 lg:py-1.5"
+                      >
+                        <ShieldCheck
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0 text-red-600 lg:h-3.5 lg:w-3.5"
+                        />
+                        <span>Quản trị</span>
+                      </Link>
+                    )}
+
+                    {showLogoutButton && (
+                      <div className="border-t border-amber-200/80 pt-2 lg:border-0 lg:pt-0">
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          disabled={loggingOut}
+                          className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-red-300/80 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-100 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60 lg:min-h-[36px] lg:w-auto lg:rounded-full lg:px-3 lg:py-1.5"
+                        >
+                          <LogOut
+                            aria-hidden="true"
+                            className="h-4 w-4 shrink-0 lg:h-3.5 lg:w-3.5"
+                          />
+                          <span>Đăng xuất</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
         <main className="relative z-10">
-          <HeroSection
-            coupleTitle={settings.coupleTitle}
-            heroSubtitle={settings.heroSubtitle}
-            loveStartDate={settings.loveStartDate}
-            daysTogether={daysTogether}
-            memoriesCount={memories.length}
-            onStartJourney={handleStartJourney}
-          />
+          {activeSection === 'story' ? (
+            <>
+              <HeroSection
+                coupleTitle={settings.coupleTitle}
+                heroSubtitle={settings.heroSubtitle}
+                loveStartDate={settings.loveStartDate}
+                daysTogether={daysTogether}
+                memoriesCount={memories.length}
+                onStartJourney={handleStartJourney}
+              />
 
-          <MemoryTimeline memories={memories} onOpenPhoto={handleOpenPhoto} />
+              <MemoryTimeline memories={memories} onOpenPhoto={handleOpenPhoto} />
 
-          <EnvelopeLetter
-            letterTitle={settings.letterTitle}
-            letterBody={settings.letterBody}
-            letterSignature={settings.letterSignature}
-            onOpen={handleLetterOpen}
-          />
+              <EnvelopeLetter
+                letterTitle={settings.letterTitle}
+                letterBody={settings.letterBody}
+                letterSignature={settings.letterSignature}
+                onOpen={handleLetterOpen}
+              />
+            </>
+          ) : (
+            <DailyDiarySection
+              coupleTitle={settings.coupleTitle}
+              initialEntries={initialDiaryEntries}
+              currentUser={currentUser}
+              onEntriesCountChange={setDiaryCount}
+            />
+          )}
         </main>
 
-        <footer className="relative z-10 px-4 pb-10 text-center text-xs text-rose-300/65">
+        <footer className="relative z-10 px-4 pb-28 pt-2 text-center text-xs text-stone-600 md:pb-10">
           <p className="inline-flex max-w-full items-center gap-1.5">
-            <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400" />
+            <Heart className="h-3 w-3 shrink-0 fill-red-500 text-red-500" />
             <span className="min-w-0 break-words [overflow-wrap:anywhere]">
               Nơi cất giữ từng nhịp tim dịu dàng của {settings.coupleTitle}
             </span>
@@ -364,7 +510,7 @@ export function StoryExperience({
             aria-modal="true"
             aria-label="Ngắm lại trái tim pixel"
             tabIndex={-1}
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-[#060204]/80 p-4 backdrop-blur-md sm:items-center"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-stone-950/60 p-4 backdrop-blur-md sm:items-center"
             onClick={() => setShowHeartModal(false)}
           >
             <div
@@ -376,7 +522,7 @@ export function StoryExperience({
                 type="button"
                 onClick={() => setShowHeartModal(false)}
                 aria-label="Đóng trái tim pixel"
-                className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-rose-500/30 bg-[#190911]/90 text-rose-200 shadow-sm transition hover:border-rose-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-amber-300/80 bg-[#FFFDF5]/95 text-stone-800 shadow-sm transition hover:border-red-300 hover:text-stone-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
               >
                 <X className="h-5 w-5" />
               </button>

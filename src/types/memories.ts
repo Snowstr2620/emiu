@@ -13,7 +13,18 @@ export type ActivityEventType =
   | 'music_toggled'
   | 'memory_viewed'
   | 'letter_opened'
+  | 'diary_saved'
+  | 'diary_deleted'
   | 'logout';
+
+export type DiaryMood =
+  | 'loved'
+  | 'happy'
+  | 'peaceful'
+  | 'miss_you'
+  | 'grateful'
+  | 'excited'
+  | 'tired';
 
 export interface AppUser {
   id: string;
@@ -86,6 +97,12 @@ export type AdminSiteSettings = Omit<SiteSettings, 'viewerPasscodeHash'> & {
   usingDefaultSessionSecret?: boolean;
 };
 
+export interface MemoryImageItem {
+  url: string;
+  alt: string;
+  mediaType?: 'image' | 'video';
+}
+
 export interface MemoryItem {
   id: string;
   memoryDate: string; // YYYY-MM-DD
@@ -93,18 +110,37 @@ export interface MemoryItem {
   story: string;
   imageUrl: string;
   imageAlt: string;
+  images?: MemoryImageItem[];
   sortOrder: number;
   createdAt: string;
+}
+
+export interface DiaryEntry {
+  id: string;
+  entryDate: string; // YYYY-MM-DD
+  title: string;
+  content: string;
+  mood: DiaryMood;
+  imageUrl: string;
+  imageAlt: string;
+  authorId: string | null;
+  authorUsername: string;
+  authorDisplayName: string;
+  authorRole: UserRole;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PublicSiteData {
   settings: PublicSiteSettings;
   memories: MemoryItem[];
+  diaryEntries?: DiaryEntry[];
 }
 
 export interface AdminSiteData {
   settings: AdminSiteSettings;
   memories: MemoryItem[];
+  diaryEntries?: DiaryEntry[];
   users: SafeAppUser[];
   activityLogs: ActivityLogItem[];
   trafficSummary: TrafficSummary;

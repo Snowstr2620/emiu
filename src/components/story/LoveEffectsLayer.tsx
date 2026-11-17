@@ -33,25 +33,25 @@ interface HeartBurst {
 }
 
 const FLOATING_PARTICLES: FloatingParticle[] = [
-  { id: 1, kind: 'petal', leftPercent: 6, sizePx: 14, durationSec: 15, delaySec: -2, driftPx: 34, rotateDeg: 210, opacity: 0.55, color: '#fb7185', desktopOnly: false },
-  { id: 2, kind: 'heart', leftPercent: 14, sizePx: 12, durationSec: 17, delaySec: -6, driftPx: -26, rotateDeg: 0, opacity: 0.45, color: '#ef4444', desktopOnly: false },
-  { id: 3, kind: 'petal', leftPercent: 24, sizePx: 12, durationSec: 19, delaySec: -9, driftPx: 28, rotateDeg: 260, opacity: 0.5, color: '#fda4af', desktopOnly: false },
-  { id: 4, kind: 'heart', leftPercent: 35, sizePx: 11, durationSec: 16, delaySec: -4, driftPx: 22, rotateDeg: 0, opacity: 0.44, color: '#e11d48', desktopOnly: false },
-  { id: 5, kind: 'petal', leftPercent: 48, sizePx: 15, durationSec: 18, delaySec: -11, driftPx: -30, rotateDeg: 190, opacity: 0.52, color: '#f472b6', desktopOnly: false },
-  { id: 6, kind: 'heart', leftPercent: 60, sizePx: 12, durationSec: 15, delaySec: -3, driftPx: -18, rotateDeg: 0, opacity: 0.48, color: '#fb7185', desktopOnly: false },
-  { id: 7, kind: 'petal', leftPercent: 72, sizePx: 13, durationSec: 20, delaySec: -7, driftPx: 26, rotateDeg: 240, opacity: 0.46, color: '#dc2626', desktopOnly: false },
-  { id: 8, kind: 'heart', leftPercent: 83, sizePx: 11, durationSec: 17, delaySec: -13, driftPx: -24, rotateDeg: 0, opacity: 0.44, color: '#fda4af', desktopOnly: false },
-  { id: 9, kind: 'petal', leftPercent: 93, sizePx: 14, durationSec: 16, delaySec: -5, driftPx: -28, rotateDeg: 200, opacity: 0.5, color: '#ffe4e6', desktopOnly: false },
+  { id: 1, kind: 'petal', leftPercent: 6, sizePx: 14, durationSec: 15, delaySec: -2, driftPx: 34, rotateDeg: 210, opacity: 0.65, color: '#ef4444', desktopOnly: false },
+  { id: 2, kind: 'heart', leftPercent: 14, sizePx: 12, durationSec: 17, delaySec: -6, driftPx: -26, rotateDeg: 0, opacity: 0.7, color: '#dc2626', desktopOnly: false },
+  { id: 3, kind: 'petal', leftPercent: 24, sizePx: 12, durationSec: 19, delaySec: -9, driftPx: 28, rotateDeg: 260, opacity: 0.55, color: '#fb7185', desktopOnly: false },
+  { id: 4, kind: 'heart', leftPercent: 35, sizePx: 11, durationSec: 16, delaySec: -4, driftPx: 22, rotateDeg: 0, opacity: 0.7, color: '#e11d48', desktopOnly: false },
+  { id: 5, kind: 'petal', leftPercent: 48, sizePx: 15, durationSec: 18, delaySec: -11, driftPx: -30, rotateDeg: 190, opacity: 0.6, color: '#f43f5e', desktopOnly: false },
+  { id: 6, kind: 'heart', leftPercent: 60, sizePx: 12, durationSec: 15, delaySec: -3, driftPx: -18, rotateDeg: 0, opacity: 0.65, color: '#dc2626', desktopOnly: false },
+  { id: 7, kind: 'petal', leftPercent: 72, sizePx: 13, durationSec: 20, delaySec: -7, driftPx: 26, rotateDeg: 240, opacity: 0.6, color: '#b91c1c', desktopOnly: false },
+  { id: 8, kind: 'heart', leftPercent: 83, sizePx: 11, durationSec: 17, delaySec: -13, driftPx: -24, rotateDeg: 0, opacity: 0.65, color: '#ef4444', desktopOnly: false },
+  { id: 9, kind: 'petal', leftPercent: 93, sizePx: 14, durationSec: 16, delaySec: -5, driftPx: -28, rotateDeg: 200, opacity: 0.6, color: '#f43f5e', desktopOnly: false },
   // Extra elements visible >= 640px for richer tablet/desktop density (~15 total)
-  { id: 10, kind: 'heart', leftPercent: 10, sizePx: 13, durationSec: 19, delaySec: -10, driftPx: 30, rotateDeg: 0, opacity: 0.45, color: '#f472b6', desktopOnly: true },
-  { id: 11, kind: 'petal', leftPercent: 29, sizePx: 14, durationSec: 17, delaySec: -1, driftPx: -22, rotateDeg: 230, opacity: 0.48, color: '#ffe4e6', desktopOnly: true },
-  { id: 12, kind: 'heart', leftPercent: 42, sizePx: 10, durationSec: 21, delaySec: -14, driftPx: 18, rotateDeg: 0, opacity: 0.42, color: '#ef4444', desktopOnly: true },
-  { id: 13, kind: 'petal', leftPercent: 55, sizePx: 13, durationSec: 16, delaySec: -8, driftPx: 32, rotateDeg: 250, opacity: 0.46, color: '#f43f5e', desktopOnly: true },
-  { id: 14, kind: 'heart', leftPercent: 67, sizePx: 12, durationSec: 18, delaySec: -12, driftPx: -28, rotateDeg: 0, opacity: 0.45, color: '#fb7185', desktopOnly: true },
-  { id: 15, kind: 'petal', leftPercent: 88, sizePx: 15, durationSec: 20, delaySec: -15, driftPx: 20, rotateDeg: 215, opacity: 0.48, color: '#fda4af', desktopOnly: true },
+  { id: 10, kind: 'heart', leftPercent: 10, sizePx: 13, durationSec: 19, delaySec: -10, driftPx: 30, rotateDeg: 0, opacity: 0.65, color: '#dc2626', desktopOnly: true },
+  { id: 11, kind: 'petal', leftPercent: 29, sizePx: 14, durationSec: 17, delaySec: -1, driftPx: -22, rotateDeg: 230, opacity: 0.55, color: '#fb7185', desktopOnly: true },
+  { id: 12, kind: 'heart', leftPercent: 42, sizePx: 10, durationSec: 21, delaySec: -14, driftPx: 18, rotateDeg: 0, opacity: 0.65, color: '#ef4444', desktopOnly: true },
+  { id: 13, kind: 'petal', leftPercent: 55, sizePx: 13, durationSec: 16, delaySec: -8, driftPx: 32, rotateDeg: 250, opacity: 0.6, color: '#e11d48', desktopOnly: true },
+  { id: 14, kind: 'heart', leftPercent: 67, sizePx: 12, durationSec: 18, delaySec: -12, driftPx: -28, rotateDeg: 0, opacity: 0.65, color: '#dc2626', desktopOnly: true },
+  { id: 15, kind: 'petal', leftPercent: 88, sizePx: 15, durationSec: 20, delaySec: -15, driftPx: 20, rotateDeg: 215, opacity: 0.55, color: '#f43f5e', desktopOnly: true },
 ];
 
-const BURST_COLORS = ['#ef4444', '#dc2626', '#e11d48', '#fb7185', '#f472b6'];
+const BURST_COLORS = ['#dc2626', '#ef4444', '#b91c1c', '#e11d48', '#fb7185'];
 const MAX_CONCURRENT_BURSTS = 5;
 const BURST_DURATION_MS = 750;
 

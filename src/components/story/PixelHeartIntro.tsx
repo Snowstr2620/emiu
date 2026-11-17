@@ -35,14 +35,14 @@ const HEART_GRID: readonly string[] = [
 ];
 
 const PALETTE: Record<string, string> = {
-  H: '#ffe4e6',
+  H: '#fecdd3',
   L: '#fda4af',
   B: '#fb7185',
-  P: '#f472b6',
-  R: '#f43f5e',
-  D: '#e11d48',
-  V: '#ec4899',
-  M: '#dc2626',
+  P: '#f43f5e',
+  R: '#ef4444',
+  D: '#dc2626',
+  V: '#e11d48',
+  M: '#b91c1c',
 };
 
 interface HeartPixel {
@@ -97,11 +97,11 @@ const HEART_PIXELS = buildHeartPixels();
 
 const AMBIENT_SPARKLES: FloatingSparkle[] = [
   { nx: 0.14, ny: 0.22, size: 4, speed: 1.4, phase: 0.4, color: '#ef4444' },
-  { nx: 0.86, ny: 0.2, size: 4.5, speed: 1.7, phase: 1.5, color: '#fb7185' },
-  { nx: 0.1, ny: 0.68, size: 3.5, speed: 1.3, phase: 2.3, color: '#fda4af' },
-  { nx: 0.9, ny: 0.72, size: 4, speed: 1.6, phase: 3.1, color: '#f472b6' },
+  { nx: 0.86, ny: 0.2, size: 4.5, speed: 1.7, phase: 1.5, color: '#f43f5e' },
+  { nx: 0.1, ny: 0.68, size: 3.5, speed: 1.3, phase: 2.3, color: '#f59e0b' },
+  { nx: 0.9, ny: 0.72, size: 4, speed: 1.6, phase: 3.1, color: '#e11d48' },
   { nx: 0.24, ny: 0.88, size: 3.5, speed: 1.5, phase: 4.2, color: '#dc2626' },
-  { nx: 0.78, ny: 0.86, size: 4, speed: 1.2, phase: 5.0, color: '#ffe4e6' },
+  { nx: 0.78, ny: 0.86, size: 4, speed: 1.2, phase: 5.0, color: '#d97706' },
 ];
 
 /**
@@ -194,14 +194,14 @@ export function PixelHeartIntro({
       const centerX = logicalWidth / 2;
       const centerY = logicalHeight / 2;
 
-      // Soft crimson-rose aura behind the pixel heart
+      // Soft crimson aura behind the pixel heart on pale butter-yellow canvas
       if (typeof ctx.createRadialGradient === 'function') {
         const pulseGlow = staticMode ? 1 : 0.94 + Math.sin(elapsedMs * 0.0036) * 0.06;
         const glowRadius = Math.min(logicalWidth, logicalHeight) * 0.44 * pulseGlow;
         const gradient = ctx.createRadialGradient(centerX, centerY, 4, centerX, centerY, glowRadius);
-        gradient.addColorStop(0, 'rgba(225, 29, 72, 0.34)');
-        gradient.addColorStop(0.55, 'rgba(244, 114, 182, 0.14)');
-        gradient.addColorStop(1, 'rgba(8, 3, 6, 0)');
+        gradient.addColorStop(0, 'rgba(220, 38, 38, 0.22)');
+        gradient.addColorStop(0.55, 'rgba(251, 191, 36, 0.16)');
+        gradient.addColorStop(1, 'rgba(255, 251, 235, 0)');
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(centerX, centerY, glowRadius, 0, Math.PI * 2);
@@ -342,42 +342,42 @@ export function PixelHeartIntro({
       }`}
     >
       <div
-        className={`mx-auto inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-950/60 px-3.5 py-1 text-xs font-semibold text-rose-200 shadow-sm ${
+        className={`mx-auto inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-100/80 px-3.5 py-1 text-xs font-semibold text-amber-950 shadow-sm ${
           isModalReplay ? 'max-w-[68%]' : 'max-w-[82%]'
         }`}
       >
-        <Sparkles className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+        <Sparkles className="h-3.5 w-3.5 shrink-0 text-red-600" />
         <span className="truncate">
           {isModalReplay ? `Dành riêng cho ${greetingName}` : `Thương chào ${greetingName}`}
         </span>
       </div>
 
       {isModalReplay ? (
-        <h2 className="mt-3 break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold tracking-tight text-rose-50 sm:text-3xl">
+        <h2 className="mt-3 break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
           {coupleTitle}
         </h2>
       ) : (
-        <h1 className="mt-3 break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold tracking-tight text-rose-50 sm:text-3xl">
+        <h1 className="mt-3 break-words [overflow-wrap:anywhere] font-serif text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
           {coupleTitle}
         </h1>
       )}
 
-      <p className="mt-1.5 text-sm leading-relaxed text-rose-200/80">
+      <p className="mt-1.5 text-sm leading-relaxed text-stone-700">
         {isModalReplay
           ? 'Mỗi nhịp đập nhỏ bé này đều đang khẽ gọi tên mình, ngắm thêm chút nữa nhé.'
           : 'Nhịp tim này đang ghép từng mảnh ký ức chỉ để đợi em bước vào...'}
       </p>
 
-      <div className="my-4 flex items-center justify-center rounded-2xl border border-rose-500/25 bg-[#0d0408]/90 p-2 shadow-[inset_0_0_24px_rgba(225,29,72,0.14)]">
+      <div className="my-4 flex items-center justify-center rounded-2xl border border-amber-300/75 bg-[#FFFDF5] p-2 shadow-[inset_0_0_24px_rgba(220,38,38,0.08)]">
         <canvas
           ref={canvasRef}
           role="img"
           aria-label="Trái tim pixel đang ghép nối và đập nhịp yêu thương"
-          className="h-[220px] w-[240px] drop-shadow-[0_0_22px_rgba(225,29,72,0.45)] sm:h-[296px] sm:w-[320px]"
+          className="h-[205px] w-[224px] max-w-full drop-shadow-[0_0_18px_rgba(220,38,38,0.28)] sm:h-[296px] sm:w-[320px]"
         />
       </div>
 
-      <p className="mb-5 font-serif text-sm font-medium italic text-rose-300/90 sm:text-base">
+      <p className="mb-5 font-serif text-sm font-medium italic text-red-700 sm:text-base">
         ♥ Từng mảnh nhỏ đều mang theo một ngày anh thương em thật nhiều ♥
       </p>
 
@@ -385,9 +385,9 @@ export function PixelHeartIntro({
         type="button"
         onClick={onEnterStory}
         disabled={entering}
-        className="love-pulse-glow inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(225,29,72,0.38)] transition hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)] hover:ring-1 hover:ring-rose-300/40 active:scale-[0.98] disabled:opacity-70 motion-reduce:transform-none motion-reduce:transition-none"
+        className="love-pulse-glow inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(220,38,38,0.28)] transition hover:shadow-[0_14px_34px_rgba(220,38,38,0.4)] hover:ring-1 hover:ring-red-300 active:scale-[0.98] disabled:opacity-70 motion-reduce:transform-none motion-reduce:transition-none"
       >
-        <Heart className="h-4 w-4 fill-white" />
+        <Heart className="h-4 w-4 fill-white text-white" />
         <span>
           {entering
             ? 'Đang mở cửa miền ký ức...'

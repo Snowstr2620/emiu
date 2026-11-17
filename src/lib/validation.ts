@@ -1,9 +1,12 @@
 import path from 'node:path';
 import { parseIsoDateParts } from '@/lib/date-utils';
-import type { ActivityEventType, UserRole } from '@/types/memories';
+import { isVideoMediaUrl, MAX_ALBUM_IMAGES } from '@/lib/memory-album';
+import type { ActivityEventType, DiaryMood, MemoryImageItem, UserRole } from '@/types/memories';
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB
 export const MAX_AUDIO_BYTES = 15 * 1024 * 1024; // 15 MB
+export const MAX_MEMORY_STORY_LENGTH = 6000;
 
 export const ALLOWED_IMAGE_MIMES = new Set([
   'image/jpeg',
@@ -11,6 +14,13 @@ export const ALLOWED_IMAGE_MIMES = new Set([
   'image/webp',
   'image/gif',
   'image/avif',
+]);
+
+export const ALLOWED_VIDEO_MIMES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-m4v',
 ]);
 
 export const ALLOWED_AUDIO_MIMES = new Set([
@@ -32,11 +42,13 @@ export const ALLOWED_IMAGE_EXTENSIONS = new Set([
   '.avif',
 ]);
 
+export const ALLOWED_VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.m4v']);
+
 export const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.wav']);
 
 const FORBIDDEN_EXTENSIONS = new Set(['.svg', '.html', '.htm', '.js', '.mjs', '.php', '.exe']);
 
-export type UploadKind = 'image' | 'audio';
+export type UploadKind = 'image' | 'video' | 'audio';
 
 export function validateUploadRequest(input: {
   kind: UploadKind;
@@ -67,6 +79,22 @@ export function validateUploadRequest(input: {
       return {
         valid: false,
         error: 'Ảnh vượt quá giới hạn tối đa 10MB.',
+      };
+    }
+    return { valid: true };
+  }
+
+  if (kind === 'video') {
+    if (!ALLOWED_VIDEO_MIMES.has(normalizedMime) || !ALLOWED_VIDEO_EXTENSIONS.has(ext)) {
+      return {
+        valid: false,
+        error: 'Chỉ hỗ trợ video định dạng MP4, WebM, MOV hoặc M4V.',
+      };
+    }
+    if (size > MAX_VIDEO_BYTES) {
+      return {
+        valid: false,
+        error: 'Video vượt quá giới hạn tối đa 100MB.',
       };
     }
     return { valid: true };
@@ -130,21 +158,22 @@ export interface ValidatedMemoryPayload {
   story: string;
   imageUrl: string;
   imageAlt: string;
+  images: MemoryImageItem[];
 }
 
 export function validateMemoryPayload(
   raw: unknown
 ): { data: ValidatedMemoryPayload } | { error: string } {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'Dữ liệu kỷ niệm không hợp lệ.' };
   }
 
   const record = raw as Record<string, unknown>;
   const memoryDate = typeof record.memoryDate === 'string' ? record.memoryDate.trim() : '';
-  const title = typeof record.title === 'string' ? record.title.trim() : '';
+  const title = typeof record.title === 'string' ? record.title.trim().slice(0, 120) : '';
   const story = typeof record.story === 'string' ? record.story.trim() : '';
-  const imageUrl = typeof record.imageUrl === 'string' ? record.imageUrl.trim() : '';
-  const imageAlt = typeof record.imageAlt === 'string' ? record.imageAlt.trim() : '';
+  const fallbackImageUrl = typeof record.imageUrl === 'string' ? record.imageUrl.trim() : '';
+  const fallbackImageAlt = typeof record.imageAlt === 'string' ? record.imageAlt.trim() : '';
 
   if (!parseIsoDateParts(memoryDate)) {
     return { error: 'Ngày kỷ niệm chưa đúng định dạng YYYY-MM-DD.' };
@@ -152,17 +181,125 @@ export function validateMemoryPayload(
   if (!story) {
     return { error: 'Vui lòng nhập đôi dòng câu chuyện kỷ niệm.' };
   }
-  if (!isValidMediaUrl(imageUrl)) {
-    return { error: 'Đường dẫn ảnh kỷ niệm không hợp lệ.' };
+
+  const defaultAlt = (title || 'Ảnh kỷ niệm').slice(0, 160);
+  let normalizedImages: MemoryImageItem[] = [];
+
+  if (record.images !== undefined) {
+    if (!Array.isArray(record.images) || record.images.length === 0) {
+      return { error: 'Album kỷ niệm cần ít nhất 1 bức ảnh.' };
+    }
+    if (record.images.length > MAX_ALBUM_IMAGES) {
+      return { error: `Mỗi album kỷ niệm hỗ trợ tối đa ${MAX_ALBUM_IMAGES} ảnh.` };
+    }
+    for (const rawItem of record.images) {
+      if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
+        return { error: 'Dữ liệu ảnh trong album không hợp lệ.' };
+      }
+      const itemRec = rawItem as Record<string, unknown>;
+      const url = typeof itemRec.url === 'string' ? itemRec.url.trim() : '';
+      const alt = typeof itemRec.alt === 'string' ? itemRec.alt.trim() : '';
+      if (
+        itemRec.mediaType !== undefined &&
+        itemRec.mediaType !== 'image' &&
+        itemRec.mediaType !== 'video'
+      ) {
+        return { error: 'Loại tệp trong album không hợp lệ.' };
+      }
+      if (!isValidMediaUrl(url)) {
+        return { error: 'Có đường dẫn ảnh trong album không hợp lệ.' };
+      }
+      const isVideo =
+        itemRec.mediaType === 'video' || (itemRec.mediaType !== 'image' && isVideoMediaUrl(url));
+      const resolvedAlt = (alt || defaultAlt).slice(0, 160);
+      normalizedImages.push(
+        isVideo ? { url, alt: resolvedAlt, mediaType: 'video' } : { url, alt: resolvedAlt }
+      );
+    }
+  } else {
+    if (!isValidMediaUrl(fallbackImageUrl)) {
+      return { error: 'Đường dẫn ảnh kỷ niệm không hợp lệ.' };
+    }
+    const resolvedAlt = (fallbackImageAlt || defaultAlt).slice(0, 160);
+    normalizedImages = [
+      isVideoMediaUrl(fallbackImageUrl)
+        ? { url: fallbackImageUrl, alt: resolvedAlt, mediaType: 'video' }
+        : { url: fallbackImageUrl, alt: resolvedAlt },
+    ];
   }
 
   return {
     data: {
       memoryDate,
+      title,
+      story: story.slice(0, MAX_MEMORY_STORY_LENGTH),
+      imageUrl: normalizedImages[0].url,
+      imageAlt: normalizedImages[0].alt,
+      images: normalizedImages,
+    },
+  };
+}
+
+export const DIARY_MOODS = new Set<DiaryMood>([
+  'loved',
+  'happy',
+  'peaceful',
+  'miss_you',
+  'grateful',
+  'excited',
+  'tired',
+]);
+
+export interface ValidatedDiaryEntryPayload {
+  entryDate: string;
+  title: string;
+  content: string;
+  mood: DiaryMood;
+  imageUrl: string;
+  imageAlt: string;
+}
+
+export function validateDiaryEntryPayload(
+  raw: unknown
+): { data: ValidatedDiaryEntryPayload } | { error: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: 'Dữ liệu nhật ký không hợp lệ.' };
+  }
+
+  const record = raw as Record<string, unknown>;
+  const entryDate = typeof record.entryDate === 'string' ? record.entryDate.trim() : '';
+  const title = typeof record.title === 'string' ? record.title.trim() : '';
+  const content = typeof record.content === 'string' ? record.content.trim() : '';
+  const rawMood =
+    record.mood === undefined || record.mood === ''
+      ? 'loved'
+      : typeof record.mood === 'string'
+        ? record.mood.trim()
+        : '';
+  const imageUrl = typeof record.imageUrl === 'string' ? record.imageUrl.trim() : '';
+  const imageAlt = typeof record.imageAlt === 'string' ? record.imageAlt.trim() : '';
+
+  if (!parseIsoDateParts(entryDate)) {
+    return { error: 'Ngày viết nhật ký chưa đúng định dạng YYYY-MM-DD.' };
+  }
+  if (!content) {
+    return { error: 'Vui lòng viết đôi dòng nhật ký cho ngày hôm nay.' };
+  }
+  if (!DIARY_MOODS.has(rawMood as DiaryMood)) {
+    return { error: 'Tâm trạng nhật ký không hợp lệ.' };
+  }
+  if (imageUrl && !isValidMediaUrl(imageUrl)) {
+    return { error: 'Đường dẫn ảnh đính kèm không hợp lệ.' };
+  }
+
+  return {
+    data: {
+      entryDate,
       title: title.slice(0, 120),
-      story: story.slice(0, 1200),
+      content: content.slice(0, 4000),
+      mood: rawMood as DiaryMood,
       imageUrl,
-      imageAlt: (imageAlt || title || 'Ảnh kỷ niệm').slice(0, 160),
+      imageAlt: imageUrl ? (imageAlt || title || 'Ảnh nhật ký ngày hôm nay').slice(0, 160) : '',
     },
   };
 }

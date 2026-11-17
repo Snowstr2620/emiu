@@ -5,12 +5,14 @@ import {
   sanitizeUserForClient,
 } from '@/lib/auth';
 import { getVietnamCalendarDateParts } from '@/lib/date-utils';
+import { getMemoryImages } from '@/lib/memory-album';
 import type { ListActivityLogsFilter } from '@/lib/storage/types';
 import type { ValidatedUpdateUserPayload } from '@/lib/validation';
 import type {
   ActivityLogItem,
   AdminSiteSettings,
   AppUser,
+  DiaryEntry,
   MemoryItem,
   PublicSiteSettings,
   SiteSettings,
@@ -23,8 +25,15 @@ export { sanitizeUserForClient };
 export interface LocalDbSchema {
   settings: SiteSettings;
   memories: MemoryItem[];
+  diaryEntries: DiaryEntry[];
   users: AppUser[];
   activityLogs: ActivityLogItem[];
+}
+
+export function sortDiaryEntries(entries: DiaryEntry[]): DiaryEntry[] {
+  return [...entries].sort(
+    (a, b) => b.entryDate.localeCompare(a.entryDate) || b.createdAt.localeCompare(a.createdAt)
+  );
 }
 
 export const SEED_ADMIN_USER_ID = '00000000-0000-4000-8000-000000000001';
@@ -121,6 +130,12 @@ export function createSeedSettingsAndMemories(now: string = new Date().toISOStri
           'Ngoài hiên mưa rơi tí tách, còn trong tim anh lại rộn ràng nắng ấm từ khoảnh khắc em khẽ cười bên hai ly trà nóng. Từ giây phút ấy, anh biết mình đã thương em mất rồi.',
         imageUrl: '/samples/memory-1.svg',
         imageAlt: 'Hai tách trà ấm trong chiều mưa đầu tiên bên em',
+        images: [
+          {
+            url: '/samples/memory-1.svg',
+            alt: 'Hai tách trà ấm trong chiều mưa đầu tiên bên em',
+          },
+        ],
         sortOrder: 0,
         createdAt: now,
       },
@@ -132,6 +147,12 @@ export function createSeedSettingsAndMemories(now: string = new Date().toISOStri
           'Gió chiều trên đồi khẽ vương mái tóc em bay, ánh nắng cuối ngày đẹp đến nao lòng nhưng vẫn chẳng rực rỡ bằng ánh mắt em nhìn anh lúc ấy.',
         imageUrl: '/samples/memory-2.svg',
         imageAlt: 'Hoàng hôn vàng hồng dịu dàng trên triền đồi',
+        images: [
+          {
+            url: '/samples/memory-2.svg',
+            alt: 'Hoàng hôn vàng hồng dịu dàng trên triền đồi',
+          },
+        ],
         sortOrder: 1,
         createdAt: now,
       },
@@ -143,6 +164,12 @@ export function createSeedSettingsAndMemories(now: string = new Date().toISOStri
           'Bước chân trần in dấu trên cát mịn, tay đan tay thật chặt dưới ánh trăng bạc. Hai đứa khẽ ước thầm năm nào cũng sẽ cùng nhau quay lại nghe biển hát lời yêu.',
         imageUrl: '/samples/memory-3.svg',
         imageAlt: 'Ánh trăng sáng soi trên mặt biển đêm yên bình',
+        images: [
+          {
+            url: '/samples/memory-3.svg',
+            alt: 'Ánh trăng sáng soi trên mặt biển đêm yên bình',
+          },
+        ],
         sortOrder: 2,
         createdAt: now,
       },
@@ -154,6 +181,12 @@ export function createSeedSettingsAndMemories(now: string = new Date().toISOStri
           'Chẳng cần điều gì xa hoa, chỉ một bó hoa dịu dàng, bữa tối anh nấu bằng cả tấm lòng và cái ôm thật lâu từ em — vậy là đủ trọn vẹn cả bầu trời hạnh phúc.',
         imageUrl: '/samples/memory-4.svg',
         imageAlt: 'Bó hoa hồng nhung rực rỡ dưới ánh nến đêm',
+        images: [
+          {
+            url: '/samples/memory-4.svg',
+            alt: 'Bó hoa hồng nhung rực rỡ dưới ánh nến đêm',
+          },
+        ],
         sortOrder: 3,
         createdAt: now,
       },
@@ -167,6 +200,7 @@ export function createInitialSeedData(): LocalDbSchema {
   return {
     settings,
     memories,
+    diaryEntries: [],
     users: buildInitialUsers(now),
     activityLogs: [],
   };
@@ -228,7 +262,20 @@ export function ensureSeededUsersAndUpgrade(raw: Partial<LocalDbSchema>): {
   }
 
   const memories = Array.isArray(raw.memories)
-    ? [...raw.memories].sort((a, b) => a.sortOrder - b.sortOrder)
+    ? [...raw.memories]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((m) => {
+          const images = getMemoryImages(m);
+          if (!Array.isArray(m.images) || m.images.length === 0) {
+            migrated = true;
+          }
+          return {
+            ...m,
+            imageUrl: images[0]?.url || m.imageUrl,
+            imageAlt: images[0]?.alt || m.imageAlt,
+            images,
+          };
+        })
     : (() => {
       migrated = true;
       return fallback.memories;
@@ -241,10 +288,18 @@ export function ensureSeededUsersAndUpgrade(raw: Partial<LocalDbSchema>): {
       return [];
     })();
 
+  const diaryEntries = Array.isArray(raw.diaryEntries)
+    ? sortDiaryEntries(raw.diaryEntries)
+    : (() => {
+      migrated = true;
+      return [];
+    })();
+
   return {
     db: {
       settings,
       memories,
+      diaryEntries,
       users,
       activityLogs,
     },

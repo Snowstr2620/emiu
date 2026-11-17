@@ -16,7 +16,14 @@ export async function POST(request: Request) {
       fileName?: unknown;
     } | null;
 
-    const kind = body?.kind === 'audio' ? 'audio' : body?.kind === 'image' ? 'image' : null;
+    const kind: UploadKind | null =
+      body?.kind === 'audio'
+        ? 'audio'
+        : body?.kind === 'video'
+          ? 'video'
+          : body?.kind === 'image'
+            ? 'image'
+            : null;
     if (!kind) {
       return NextResponse.json({ error: 'Loại tệp tải lên không hợp lệ.' }, { status: 400 });
     }

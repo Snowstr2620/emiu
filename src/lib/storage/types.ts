@@ -5,17 +5,32 @@ import {
   AdminSiteData,
   AdminSiteSettings,
   AppUser,
+  DiaryEntry,
+  MemoryImageItem,
   MemoryItem,
   PublicSiteData,
   SafeAppUser,
+  UserRole,
 } from '@/types/memories';
 import {
   UploadKind,
   ValidatedCreateUserPayload,
+  ValidatedDiaryEntryPayload,
   ValidatedMemoryPayload,
   ValidatedSettingsPayload,
   ValidatedUpdateUserPayload,
 } from '@/lib/validation';
+
+export type MemoryMutationInput = Omit<ValidatedMemoryPayload, 'images'> & {
+  images?: MemoryImageItem[];
+};
+
+export interface CreateDiaryEntryInput extends ValidatedDiaryEntryPayload {
+  authorId: string | null;
+  authorUsername: string;
+  authorDisplayName: string;
+  authorRole: UserRole;
+}
 
 export interface SignedUploadTarget {
   signedUrl: string;
@@ -45,10 +60,17 @@ export interface StorageRepository {
   getPublicData(): Promise<PublicSiteData>;
   getAdminData(currentUserId?: string | null): Promise<AdminSiteData>;
   updateSettings(input: ValidatedSettingsPayload): Promise<AdminSiteSettings>;
-  createMemory(input: ValidatedMemoryPayload): Promise<MemoryItem>;
-  updateMemory(id: string, input: ValidatedMemoryPayload): Promise<MemoryItem | null>;
+  getMemoryById(id: string): Promise<MemoryItem | null>;
+  createMemory(input: MemoryMutationInput): Promise<MemoryItem>;
+  updateMemory(id: string, input: MemoryMutationInput): Promise<MemoryItem | null>;
   deleteMemory(id: string): Promise<boolean>;
   reorderMemories(ids: string[]): Promise<MemoryItem[]>;
+  listDiaryEntries(): Promise<DiaryEntry[]>;
+  getDiaryEntryById(id: string): Promise<DiaryEntry | null>;
+  createDiaryEntry(input: CreateDiaryEntryInput): Promise<DiaryEntry>;
+  updateDiaryEntry(id: string, input: ValidatedDiaryEntryPayload): Promise<DiaryEntry | null>;
+  deleteDiaryEntry(id: string): Promise<boolean>;
+  isMediaUrlReferenced(url: string): Promise<boolean>;
   listUsers(): Promise<SafeAppUser[]>;
   getUserByUsername(username: string): Promise<AppUser | null>;
   getUserById(id: string): Promise<AppUser | null>;

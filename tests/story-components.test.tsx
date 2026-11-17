@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { AudioToggle } from '@/components/story/AudioToggle';
+import { DailyDiarySection } from '@/components/story/DailyDiarySection';
 import { LoveEffectsLayer } from '@/components/story/LoveEffectsLayer';
+import { MemoryAlbumDetailView } from '@/components/story/MemoryAlbumDetailView';
 import { PixelHeartIntro } from '@/components/story/PixelHeartIntro';
 import { StoryExperience } from '@/components/story/StoryExperience';
 import { ViewerPasscodeGate } from '@/components/story/ViewerPasscodeGate';
@@ -163,7 +166,8 @@ describe('StoryExperience UI components', () => {
   test('renders couple title, days-together counter, and memories in order; handles empty memories gracefully', () => {
     const { rerender } = render(<StoryExperience data={SAMPLE_DATA} />);
 
-    expect(screen.getByText('Minh & Lan')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Minh & Lan' })).toBeInTheDocument();
+    expect(screen.getByTestId('story-topbar')).toHaveTextContent('Minh & Lan');
     expect(screen.getByText(/ngày bên nhau/i)).toBeInTheDocument();
     expect(screen.getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
     expect(screen.getByText('Hoàng hôn trên đồi')).toBeInTheDocument();
@@ -204,7 +208,7 @@ describe('StoryExperience UI components', () => {
       expect(btn).toHaveClass(
         'focus-visible:outline-none',
         'focus-visible:ring-2',
-        'focus-visible:ring-rose-400'
+        'focus-visible:ring-red-500'
       );
     }
 
@@ -221,7 +225,7 @@ describe('StoryExperience UI components', () => {
     expect(img).toHaveClass('max-h-[calc(48vh-1rem)]', 'sm:max-h-[calc(56vh-1rem)]');
     expect(img).not.toHaveClass('max-h-full');
     expect(dialog).toHaveClass(
-      'bg-[#050203]/90',
+      'bg-stone-950/60',
       'overflow-y-auto',
       'overscroll-contain',
       'items-start',
@@ -275,10 +279,10 @@ describe('StoryExperience UI components', () => {
 
     const openBtn = screen.getByRole('button', { name: /Chạm để mở thư/i });
     expect(openBtn).toHaveClass(
-      'to-pink-600',
-      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'to-red-500',
+      'hover:shadow-[0_14px_34px_rgba(220,38,38,0.4)]',
       'hover:ring-1',
-      'hover:ring-rose-300/40'
+      'hover:ring-red-300'
     );
     expect(openBtn).not.toHaveClass('hover:brightness-110');
     await user.click(openBtn);
@@ -286,7 +290,7 @@ describe('StoryExperience UI components', () => {
     const letterHeading = await screen.findByText('Gửi em yêu của anh,');
     expect(letterHeading).toBeInTheDocument();
     expect(letterHeading).toHaveClass('min-w-0');
-    expect(letterHeading.closest('div')?.parentElement).toHaveClass('bg-[#16070d]/95');
+    expect(letterHeading.closest('div')?.parentElement).toHaveClass('bg-[#FFFDF5]/95');
     expect(screen.getByText('Đoạn thứ nhất của bức thư.')).toBeInTheDocument();
     expect(screen.getByText('Đoạn thứ hai đầy thương nhớ.')).toBeInTheDocument();
     expect(screen.getByText(/Thương em, Minh/)).toBeInTheDocument();
@@ -303,8 +307,11 @@ describe('StoryExperience UI components', () => {
     );
   });
 
-  test('StoryExperience renders role topbar with /admin link for admin, omits it for viewer, toggles music telemetry, replays PixelHeartIntro, and logs out', async () => {
+  test('StoryExperience renders single-row topbar, responsive mobile drawer + bottom nav, always-on autoplay music, replays PixelHeartIntro, and logs out', async () => {
     const user = userEvent.setup();
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+
     const { rerender } = render(
       <StoryExperience
         data={SAMPLE_DATA}
@@ -313,48 +320,70 @@ describe('StoryExperience UI components', () => {
       />
     );
 
+    const topbar = screen.getByTestId('story-topbar');
+    expect(topbar).toHaveClass('fixed', 'inset-x-0', 'top-0');
+
+    const primaryNav = screen.getByRole('navigation', { name: /Điều hướng chính/i });
+    expect(primaryNav).toHaveClass(
+      'fixed',
+      'inset-x-0',
+      'bottom-0',
+      'grid',
+      'grid-cols-3',
+      'md:static',
+      'md:inline-flex'
+    );
+
     const roleText = screen.getByText('Anh · Người giữ chìa khoá ký ức');
-    expect(roleText).toHaveClass('sm:max-w-[160px]', 'md:max-w-[180px]', 'lg:max-w-[220px]');
-    const roleBadge = roleText.closest('div')!;
-    expect(roleBadge).toHaveClass('order-1');
+    expect(roleText).toHaveClass('truncate', 'lg:max-w-[130px]', '2xl:max-w-[200px]');
     const adminLink = screen.getByRole('link', { name: /Quản trị/i });
     expect(adminLink).toHaveAttribute('href', '/admin');
-    expect(adminLink).toHaveClass('min-h-[36px]');
+    expect(adminLink).toHaveClass('min-h-[44px]', 'lg:min-h-[36px]');
     const heartReplayBtn = screen.getByRole('button', { name: /Ngắm lại trái tim pixel/i });
-    expect(heartReplayBtn).toHaveClass('min-h-[36px]');
+    expect(heartReplayBtn).toHaveClass('min-h-[48px]', 'md:min-h-[36px]');
     const logoutBtn = screen.getByRole('button', { name: /Đăng xuất/i });
-    expect(logoutBtn).toHaveClass('min-h-[36px]');
-    expect(adminLink.parentElement).toHaveClass('order-3', 'flex-wrap', 'sm:order-2');
-    const audioBtn = screen.getByRole('button', { name: /Bật nhạc nền/i });
-    expect(audioBtn).toHaveClass('min-h-[36px]');
-    expect(audioBtn.parentElement?.parentElement).toHaveClass(
-      'order-2',
-      'ml-auto',
-      'shrink-0',
-      'sm:order-last'
-    );
-    expect(roleBadge.parentElement).toHaveClass('flex-wrap');
-    expect(roleBadge.parentElement).toBe(adminLink.parentElement?.parentElement);
+    expect(logoutBtn).toHaveClass('min-h-[44px]', 'lg:min-h-[36px]');
 
-    // Hero top clearance, timeline scroll margin, and responsive footer
-    expect(document.querySelector('header')).toHaveClass('pt-32');
+    // Mobile account menu toggle opens drawer and Escape closes it
+    const mobileMenuToggle = screen.getByRole('button', { name: /Mở menu tài khoản/i });
+    expect(mobileMenuToggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(mobileMenuToggle);
+    expect(screen.getByRole('button', { name: /Đóng menu tài khoản/i })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(screen.getByTestId('story-account-menu')).toHaveClass('fixed', 'inset-x-3');
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('button', { name: /Mở menu tài khoản/i })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+
+    // Hero top clearance, timeline scroll margin, and responsive footer safe clearance
+    expect(document.querySelector('header')).toHaveClass('pt-20', 'sm:pt-28');
     const timelineSection = document.getElementById('timeline');
-    expect(timelineSection).toHaveClass('scroll-mt-24', 'md:scroll-mt-20');
-    expect(timelineSection).not.toHaveClass('sm:scroll-mt-20');
+    expect(timelineSection).toHaveClass('scroll-mt-20', 'md:scroll-mt-20');
     const footer = document.querySelector('footer')!;
-    expect(footer).toHaveClass('px-4');
+    expect(footer).toHaveClass('px-4', 'pb-28', 'md:pb-10');
     expect(footer.querySelector('p')).toHaveClass('max-w-full');
     expect(footer.querySelector('svg')).toHaveClass('shrink-0');
 
-    // Music toggle telemetry + reduced-motion safety on pulse icon
-    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
-    await user.click(audioBtn);
-    const pauseMusicBtn = screen.getByRole('button', { name: /Tạm dừng nhạc nền/i });
-    expect(pauseMusicBtn.querySelector('svg')).toHaveClass('motion-reduce:animate-none');
-    expect(getActivityCalls(fetchSpy)).toContainEqual(
-      expect.objectContaining({ eventType: 'music_toggled' })
-    );
+    // Always-on default background music auto-starts, renders status pill without a turn-off button, and resists pause
+    const ambientAudio = screen.getByTestId('ambient-audio') as HTMLAudioElement;
+    expect(ambientAudio).toHaveAttribute('autoplay');
+    expect(ambientAudio).toHaveAttribute('loop');
+    expect(playSpy).toHaveBeenCalled();
+
+    const musicPill = screen.getByTestId('ambient-music-pill');
+    expect(musicPill).toHaveAttribute('role', 'status');
+    expect(musicPill.querySelector('svg')).toHaveClass('motion-reduce:animate-none');
+    expect(
+      screen.queryByRole('button', { name: /Tạm dừng nhạc nền|Bật nhạc nền/i })
+    ).not.toBeInTheDocument();
+
+    playSpy.mockClear();
+    fireEvent(ambientAudio, new Event('pause'));
+    expect(playSpy).toHaveBeenCalledTimes(1);
 
     // Replay Pixel Heart modal + scrollable backdrop + h2 heading + focus trap/restore + Escape close
     heartReplayBtn.focus();
@@ -368,7 +397,7 @@ describe('StoryExperience UI components', () => {
     expect(heartCloseBtn).toHaveClass(
       'focus-visible:outline-none',
       'focus-visible:ring-2',
-      'focus-visible:ring-rose-400'
+      'focus-visible:ring-red-500'
     );
     await user.tab();
     expect(heartBackBtn).toHaveFocus();
@@ -518,9 +547,9 @@ describe('StoryExperience UI components', () => {
     const bentoBtn = screen.getByRole('button', { name: 'Bento' });
     const streamBtn = screen.getByRole('button', { name: 'Dòng chảy' });
     expect(bentoBtn).toHaveAttribute('aria-pressed', 'true');
-    expect(bentoBtn).toHaveClass('min-h-[36px]');
+    expect(bentoBtn).toHaveClass('min-h-[42px]', 'sm:min-h-[36px]');
     expect(streamBtn).toHaveAttribute('aria-pressed', 'false');
-    expect(streamBtn).toHaveClass('min-h-[36px]');
+    expect(streamBtn).toHaveClass('min-h-[42px]', 'sm:min-h-[36px]');
 
     // Editorial #01..#04 badges and 7-5-5-7 asymmetric col-span pattern
     const card1 = screen.getByText('#01').closest('article');
@@ -554,12 +583,12 @@ describe('StoryExperience UI components', () => {
     expect(heroIssueBadge.querySelector('svg')).toHaveClass('shrink-0');
     const heroCta = screen.getByRole('button', { name: /Dạo bước vào miền ký ức/i });
     expect(heroCta).toHaveClass(
-      'to-pink-600',
-      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'to-red-500',
+      'hover:shadow-[0_14px_34px_rgba(220,38,38,0.4)]',
       'hover:ring-1',
-      'hover:ring-rose-300/40'
+      'hover:ring-red-300'
     );
-    expect(bentoBtn).toHaveClass('to-pink-600');
+    expect(bentoBtn).toHaveClass('to-red-500');
 
     // Equalized paired Bento media stages
     const card1PhotoBtn = screen.getByRole('button', {
@@ -579,20 +608,274 @@ describe('StoryExperience UI components', () => {
     );
     expect(screen.getByText('#03').closest('article')).toHaveClass('md:col-span-2', 'lg:col-span-12');
 
-    // Single-memory Bento spans full 12 columns centered; disabled music omits empty ml-auto dock wrapper
+    // Single-memory Bento spans full 12 columns centered; ambient background music stays active even if settings.musicEnabled is false or musicUrl is empty
     rerender(
       <StoryExperience
         data={{
-          settings: { ...SAMPLE_DATA.settings, musicEnabled: false },
+          settings: { ...SAMPLE_DATA.settings, musicEnabled: false, musicUrl: '' },
           memories: [SAMPLE_DATA.memories[0]],
         }}
         currentUser={null}
       />
     );
     expect(screen.getByText('#01').closest('article')).toHaveClass('lg:col-span-12');
-    const heartBtn = screen.getByRole('button', { name: /Ngắm lại trái tim pixel/i });
-    const dockContainer = heartBtn.parentElement?.parentElement;
-    expect(dockContainer?.querySelector('.ml-auto')).toBeNull();
+    const ambientAudio = screen.getByTestId('ambient-audio') as HTMLAudioElement;
+    expect(ambientAudio).toHaveAttribute('src', '/samples/gentle-memories.wav');
+    expect(screen.getByTestId('ambient-music-pill')).toBeInTheDocument();
+  });
+
+  test('switches to "Nhật ký mỗi ngày" tab in top dock, allows viewer to upload/drop a photo & save a diary entry, and enforces author-only edit/delete vs admin full control', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:diary-preview'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    const dataWithDiary: PublicSiteData = {
+      ...SAMPLE_DATA,
+      diaryEntries: [
+        {
+          id: 'diary-admin-1',
+          entryDate: '2026-11-17',
+          title: 'Buổi chiều của Anh',
+          content: 'Pha sẵn tách trà ấm đợi em về.',
+          mood: 'loved',
+          imageUrl: '/samples/memory-1.svg',
+          imageAlt: 'Tách trà ấm',
+          authorId: ADMIN_USER.id,
+          authorUsername: 'admin',
+          authorDisplayName: ADMIN_USER.displayName,
+          authorRole: 'admin',
+          createdAt: '2026-11-17T09:00:00.000Z',
+          updatedAt: '2026-11-17T09:00:00.000Z',
+        },
+        {
+          id: 'diary-viewer-1',
+          entryDate: '2026-11-17',
+          title: 'Buổi tối của Em',
+          content: 'Tan làm nhìn thấy anh đứng đợi thương ơi là thương.',
+          mood: 'grateful',
+          imageUrl: '',
+          imageAlt: '',
+          authorId: VIEWER_USER.id,
+          authorUsername: 'nguoithuong',
+          authorDisplayName: VIEWER_USER.displayName,
+          authorRole: 'viewer',
+          createdAt: '2026-11-17T12:30:00.000Z',
+          updatedAt: '2026-11-17T12:30:00.000Z',
+        },
+      ],
+    };
+
+    let createdDiaryPayload: Record<string, unknown> | null = null;
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/diary/upload-url' && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({ mode: 'local', uploadEndpoint: '/api/diary/upload' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/diary/upload' && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({ publicUrl: '/uploads/1731840000-aa11bb22-dinner.jpg' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/diary' && init?.method === 'POST') {
+        createdDiaryPayload = JSON.parse(String(init.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            entry: {
+              id: 'diary-viewer-new',
+              entryDate: String(createdDiaryPayload.entryDate),
+              title: String(createdDiaryPayload.title || ''),
+              content: String(createdDiaryPayload.content),
+              mood: String(createdDiaryPayload.mood || 'loved'),
+              imageUrl: String(createdDiaryPayload.imageUrl || ''),
+              imageAlt: String(createdDiaryPayload.imageAlt || 'Ảnh nhật ký'),
+              authorId: VIEWER_USER.id,
+              authorUsername: VIEWER_USER.username,
+              authorDisplayName: VIEWER_USER.displayName,
+              authorRole: 'viewer',
+              createdAt: '2026-11-17T14:00:00.000Z',
+              updatedAt: '2026-11-17T14:00:00.000Z',
+            },
+          }),
+          { status: 201 }
+        );
+      }
+      if (url === '/api/diary/diary-viewer-1' && init?.method === 'DELETE') {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    const { rerender } = render(
+      <StoryExperience data={dataWithDiary} currentUser={VIEWER_USER} viewerPasscodeEnabled />
+    );
+
+    const storyTabBtn = screen.getByRole('button', { name: /Hành trình kỷ niệm/i });
+    const diaryTabBtn = screen.getByRole('button', { name: /Nhật ký mỗi ngày/i });
+    expect(storyTabBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(diaryTabBtn).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(diaryTabBtn);
+    expect(diaryTabBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(storyTabBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Both entries visible under 17 Tháng 11, 2026
+    expect(screen.getByText('17 Tháng 11, 2026')).toBeInTheDocument();
+    const adminCard = screen.getByTestId('diary-card-diary-admin-1');
+    const viewerCard = screen.getByTestId('diary-card-diary-viewer-1');
+
+    // Viewer can ONLY edit/delete own entry, NOT admin's entry
+    expect(within(adminCard).queryByRole('button', { name: /^Sửa$/i })).not.toBeInTheDocument();
+    expect(within(adminCard).queryByRole('button', { name: /^Xoá$/i })).not.toBeInTheDocument();
+    expect(within(viewerCard).getByRole('button', { name: /^Sửa$/i })).toBeInTheDocument();
+    expect(within(viewerCard).getByRole('button', { name: /^Xoá$/i })).toBeInTheDocument();
+
+    // Clicking diary photo opens lightbox dialog and closes on Escape
+    await user.click(within(adminCard).getByRole('button', { name: /Phóng to ảnh nhật ký/i }));
+    const photoDialog = await screen.findByRole('dialog', { name: /Xem ảnh nhật ký/i });
+    expect(within(photoDialog).getByRole('img', { name: 'Tách trà ấm' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: /Xem ảnh nhật ký/i })).not.toBeInTheDocument();
+
+    // Quick-drop an image onto diary-quick-dropzone -> opens composer with preview & uploads via /api/diary/upload-url
+    const quickDropzone = screen.getByTestId('diary-quick-dropzone');
+    const photoFile = new File([new Uint8Array([1, 2, 3, 4])], 'dinner.jpg', {
+      type: 'image/jpeg',
+    });
+    fireEvent.drop(quickDropzone, {
+      dataTransfer: { files: [photoFile], types: ['Files'] },
+    });
+
+    expect(screen.getByText(/Đã chọn: dinner\.jpg/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Hạnh phúc/i }));
+    await user.type(screen.getByLabelText(/Tiêu đề nhỏ hôm nay/i), 'Bữa tối ấm áp');
+    await user.type(
+      screen.getByLabelText(/Nội dung nhật ký/i),
+      'Món mì Ý anh làm ngon xuất sắc luôn.'
+    );
+    await user.click(screen.getByRole('button', { name: /Lưu trang nhật ký/i }));
+
+    expect(await screen.findByText('Bữa tối ấm áp')).toBeInTheDocument();
+    expect(createdDiaryPayload).toMatchObject({
+      title: 'Bữa tối ấm áp',
+      content: 'Món mì Ý anh làm ngon xuất sắc luôn.',
+      mood: 'happy',
+      imageUrl: '/uploads/1731840000-aa11bb22-dinner.jpg',
+    });
+
+    // 2-click delete on viewer's own entry
+    await user.click(within(viewerCard).getByRole('button', { name: /^Xoá$/i }));
+    await user.click(within(viewerCard).getByRole('button', { name: /Xác nhận xoá/i }));
+    await waitFor(() => {
+      expect(screen.queryByText('Buổi tối của Em')).not.toBeInTheDocument();
+    });
+
+    // Rerender as ADMIN_USER -> admin sees edit/delete even on entries written by viewer
+    rerender(
+      <StoryExperience data={dataWithDiary} currentUser={ADMIN_USER} viewerPasscodeEnabled />
+    );
+    const newViewerCardAsAdmin = screen.getByTestId('diary-card-diary-viewer-new');
+    expect(within(newViewerCardAsAdmin).getByRole('button', { name: /^Sửa$/i })).toBeInTheDocument();
+    expect(within(newViewerCardAsAdmin).getByRole('button', { name: /^Xoá$/i })).toBeInTheDocument();
+  });
+
+  test('DailyDiarySection filters by author/mood/search, renders inline login when currentUser is null, and obeys Pale Yellow & Red Hearts theme', async () => {
+    const user = userEvent.setup();
+    const dataWithDiary: PublicSiteData = {
+      ...SAMPLE_DATA,
+      diaryEntries: [
+        {
+          id: 'd-1',
+          entryDate: '2026-11-17',
+          title: 'Trà chiều',
+          content: 'Ngồi đọc sách cạnh nhau.',
+          mood: 'peaceful',
+          imageUrl: '',
+          imageAlt: '',
+          authorId: ADMIN_USER.id,
+          authorUsername: 'admin',
+          authorDisplayName: 'Anh',
+          authorRole: 'admin',
+          createdAt: '2026-11-17T08:00:00.000Z',
+          updatedAt: '2026-11-17T08:00:00.000Z',
+        },
+        {
+          id: 'd-2',
+          entryDate: '2026-11-16',
+          title: 'Nhớ anh quá',
+          content: 'Mong tới cuối tuần gặp nhau.',
+          mood: 'miss_you',
+          imageUrl: '',
+          imageAlt: '',
+          authorId: VIEWER_USER.id,
+          authorUsername: 'nguoithuong',
+          authorDisplayName: 'Em bé',
+          authorRole: 'viewer',
+          createdAt: '2026-11-16T15:00:00.000Z',
+          updatedAt: '2026-11-16T15:00:00.000Z',
+        },
+      ],
+    };
+
+    const { container, rerender } = render(
+      <StoryExperience data={dataWithDiary} currentUser={null} viewerPasscodeEnabled={false} />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Nhật ký mỗi ngày/i }));
+
+    // Guest sees read-only prompt & zero edit/delete buttons
+    expect(screen.queryByRole('button', { name: /Viết cho hôm nay/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Đăng nhập để viết nhật ký/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Xoá$/i })).not.toBeInTheDocument();
+
+    // Filter by mood
+    const moodSelect = screen.getByLabelText(/Lọc theo tâm trạng/i);
+    await user.selectOptions(moodSelect, 'miss_you');
+    expect(screen.queryByText('Trà chiều')).not.toBeInTheDocument();
+    expect(screen.getByText('Nhớ anh quá')).toBeInTheDocument();
+
+    await user.selectOptions(moodSelect, 'all');
+    // Filter by author role
+    await user.click(screen.getByRole('button', { name: /Anh viết/i }));
+    expect(screen.getByText('Trà chiều')).toBeInTheDocument();
+    expect(screen.queryByText('Nhớ anh quá')).not.toBeInTheDocument();
+
+    // Rerender logged in & open composer to check Pale Yellow & Red Hearts theme across all elements
+    rerender(
+      <StoryExperience data={dataWithDiary} currentUser={VIEWER_USER} viewerPasscodeEnabled />
+    );
+    await user.click(screen.getByRole('button', { name: /Tất cả tác giả/i }));
+    await user.click(screen.getByRole('button', { name: /Viết cho hôm nay/i }));
+
+    const classTokens = Array.from(container.querySelectorAll('[class]')).flatMap((el) =>
+      (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+    );
+    for (const token of classTokens) {
+      expect(token).not.toBe('hover:brightness-110');
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-(?:rose|pink|red|emerald|amber)-950(?:\/|$)/);
+      expect(token).not.toMatch(
+        /#(?:080306|0d0408|0b0408|090306|050203|12060b|14060c|16070d|16080f|190911|071f17|23070e)/i
+      );
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
+      expect(token).not.toMatch(/^placeholder:.*\/(?:30|35|40|60)$/);
+      const opacityMatch = token.match(
+        /^(?:[a-z0-9-]+:)*(?:bg|text|border|ring|from|via|to|divide|placeholder|fill|stroke)-.*\/(\d+)$/
+      );
+      if (opacityMatch) {
+        expect(Number(opacityMatch[1]) % 5).toBe(0);
+      }
+    }
+    for (const opt of container.querySelectorAll('select option')) {
+      expect(opt).toHaveClass('bg-[#FFFBEB]', 'text-stone-900');
+    }
   });
 });
 
@@ -843,7 +1126,7 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
     expect(sendBeaconMock).not.toHaveBeenCalled();
   });
 
-  test('ViewerPasscodeGate renders purely in Dark Velvet & Crimson-Rose without blue/purple classes, meets WCAG contrast, and uses romantic copy', async () => {
+  test('ViewerPasscodeGate renders purely in Pale Yellow & Red Hearts without blue/purple classes, meets WCAG contrast, and uses romantic copy', async () => {
     const user = userEvent.setup();
     const { container, unmount } = render(
       <ViewerPasscodeGate coupleTitle="Minh & Lan" showDevDefaultHints={true} />
@@ -851,13 +1134,19 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
     expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
     expect(container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
     expect(container.innerHTML).not.toContain('hover:brightness-110');
-    expect(screen.getByLabelText(/Tài khoản của mình/i)).toHaveClass('placeholder:text-rose-300/70');
-    expect(screen.getByLabelText(/Mật khẩu yêu thương/i)).toHaveClass('placeholder:text-rose-300/70');
+    expect(screen.getByLabelText(/Tài khoản của mình/i)).toHaveClass(
+      'bg-[#FFFDF5]',
+      'placeholder:text-stone-500'
+    );
+    expect(screen.getByLabelText(/Mật khẩu yêu thương/i)).toHaveClass(
+      'bg-[#FFFDF5]',
+      'placeholder:text-stone-500'
+    );
     expect(screen.getByRole('button', { name: /Tiếp tục đến bước OTP/i })).toHaveClass(
-      'to-pink-600',
-      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'to-red-500',
+      'hover:shadow-[0_14px_34px_rgba(220,38,38,0.38)]',
       'hover:ring-1',
-      'hover:ring-rose-300/40'
+      'hover:ring-red-300'
     );
     unmount();
 
@@ -872,13 +1161,16 @@ describe('ViewerPasscodeGate 2-step auth, OTP, PixelHeart transition & guest tel
     );
     expect(otpRender.container.innerHTML).not.toMatch(/\/(18|88|92)\b/);
     expect(otpRender.container.innerHTML).not.toContain('hover:brightness-110');
-    expect(screen.getByLabelText('Chữ số OTP thứ 1')).toHaveClass('border-rose-400/50');
+    expect(screen.getByLabelText('Chữ số OTP thứ 1')).toHaveClass(
+      'border-amber-400/80',
+      'bg-[#FFFDF5]'
+    );
     const otpSubmitBtn = screen.getByRole('button', { name: /Xác nhận bước vào tim nhau/i });
     expect(otpSubmitBtn).toHaveClass(
-      'to-pink-600',
-      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'to-red-500',
+      'hover:shadow-[0_14px_34px_rgba(220,38,38,0.38)]',
       'hover:ring-1',
-      'hover:ring-rose-300/40'
+      'hover:ring-red-300'
     );
     fireEvent.paste(screen.getByLabelText('Chữ số OTP thứ 1'), {
       clipboardData: { getData: () => '999999' },
@@ -932,12 +1224,12 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
 
     const ctaBtn = screen.getByRole('button', { name: /Mở khoá miền ký ức của tụi mình/i });
     expect(ctaBtn).toHaveClass(
-      'to-pink-600',
+      'to-red-500',
       'motion-reduce:transform-none',
       'motion-reduce:transition-none',
-      'hover:shadow-[0_14px_38px_rgba(225,29,72,0.5)]',
+      'hover:shadow-[0_14px_34px_rgba(220,38,38,0.4)]',
       'hover:ring-1',
-      'hover:ring-rose-300/40'
+      'hover:ring-red-300'
     );
     expect(ctaBtn).not.toHaveClass('hover:brightness-110');
     await user.click(ctaBtn);
@@ -967,7 +1259,7 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
     expect(ctxStub.fill).toHaveBeenCalled();
   });
 
-  test('uses pure crimson and rose-pink palette in canvas pixels, sparkles, and CTA without purple/lavender hexes', () => {
+  test('uses pure crimson and rose-red palette in canvas pixels, sparkles, and CTA without purple/lavender hexes', () => {
     mockMatchMediaReducedMotion(false);
     const assignedColors: string[] = [];
     let currentFillStyle = '';
@@ -1004,7 +1296,7 @@ describe('PixelHeartIntro canvas & reduced motion', () => {
       expect(assignedColors).not.toContain(hex);
     }
     expect(assignedColors).toContain('#dc2626');
-    expect(assignedColors).toContain('#ec4899');
+    expect(assignedColors).toContain('#e11d48');
     expect(assignedColors).toContain('#ef4444');
     expect(container.innerHTML).not.toMatch(/\b(sky|indigo|blue|violet|purple)-\d{2,3}\b/);
   });
@@ -1076,5 +1368,360 @@ describe('LoveEffectsLayer ambient effects & reduced motion', () => {
     }
     expect(htmlLower).toContain('#ef4444');
     expect(htmlLower).toContain('#fb7185');
+  });
+});
+
+describe('Multi-photo album timeline cards & /memories/[id] e-commerce detail showcase', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  test('MemoryTimeline renders photo count badge, mini preview strip, and /memories/[id] detail link while preserving cover quick-zoom', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    );
+
+    const albumMemoryData: PublicSiteData = {
+      ...SAMPLE_DATA,
+      memories: [
+        {
+          id: 'mem-album-1',
+          memoryDate: '2026-04-05',
+          title: 'Đà Lạt nhiều ảnh',
+          story: 'Một album đầy nắng chiều và hương thông.',
+          imageUrl: '/samples/memory-1.svg',
+          imageAlt: 'Ảnh bìa Đà Lạt',
+          images: [
+            { url: '/samples/memory-1.svg', alt: 'Ảnh bìa Đà Lạt' },
+            { url: '/samples/memory-2.svg', alt: 'Quán cà phê sáng' },
+            { url: '/samples/memory-3.svg', alt: 'Hoàng hôn đồi thông' },
+          ],
+          sortOrder: 0,
+          createdAt: '2026-11-17T00:00:00.000Z',
+        },
+      ],
+    };
+
+    render(<StoryExperience data={albumMemoryData} currentUser={VIEWER_USER} />);
+
+    expect(screen.getByText('3 ảnh')).toBeInTheDocument();
+    const detailLink = screen.getByRole('link', { name: /Xem chi tiết album/i });
+    expect(detailLink).toHaveAttribute('href', '/memories/mem-album-1');
+
+    // Quick lightbox still opens on cover click and offers deep link into full album
+    await user.click(screen.getByRole('button', { name: /Phóng to ảnh: Đà Lạt nhiều ảnh/i }));
+    const dialog = await screen.findByRole('dialog');
+    const deepLink = within(dialog).getByRole('link', { name: /Xem trọn bộ album \(3 ảnh\)/i });
+    expect(deepLink).toHaveAttribute('href', '/memories/mem-album-1');
+  });
+
+  test('MemoryAlbumDetailView renders 2-column gallery, updates stage on thumbnail click, opens swipeable Popup Lightbox (touch + pointer + keyboard), and follows Dark Velvet theme', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    );
+
+    const albumMemory = {
+      id: 'mem-dalat-4',
+      memoryDate: '2026-04-05',
+      title: 'Chuyến đi Đà Lạt 4 ngày',
+      story: 'Ngày đầu đón sương sớm.\n\nTối uống sữa đậu nành nóng bên nhau.',
+      imageUrl: '/samples/memory-1.svg',
+      imageAlt: 'Ảnh bìa sương sớm',
+      images: [
+        { url: '/samples/memory-1.svg', alt: 'Ảnh bìa sương sớm' },
+        { url: '/samples/memory-2.svg', alt: 'Cà phê đồi chè' },
+        { url: '/samples/memory-3.svg', alt: 'Chợ đêm ấm áp' },
+        { url: '/samples/memory-4.svg', alt: 'Hoa hồng buổi cuối' },
+      ],
+      sortOrder: 1,
+      createdAt: '2026-11-17T00:00:00.000Z',
+    };
+
+    const { container } = render(
+      <MemoryAlbumDetailView
+        memory={albumMemory}
+        albumIndex={1}
+        totalAlbums={3}
+        settings={SAMPLE_DATA.settings}
+        currentUser={VIEWER_USER}
+        prevMemory={{ id: 'mem-prev', title: 'Buổi hẹn đầu' }}
+        nextMemory={{ id: 'mem-next', title: 'Biển xanh 2026' }}
+      />
+    );
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Chuyến đi Đà Lạt 4 ngày' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Ngày đầu đón sương sớm.')).toBeInTheDocument();
+    expect(screen.getByText('Tối uống sữa đậu nành nóng bên nhau.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Quay lại hành trình/i })).toHaveAttribute('href', '/');
+
+    const thumbStrip = screen.getByTestId('album-thumbnail-strip');
+    const thumbButtons = within(thumbStrip).getAllByRole('button');
+    expect(thumbButtons).toHaveLength(4);
+    expect(thumbButtons[0]).toHaveAttribute('aria-pressed', 'true');
+
+    // Click thumbnail #2 like an e-commerce product gallery
+    await user.click(thumbButtons[1]);
+    expect(thumbButtons[1]).toHaveAttribute('aria-pressed', 'true');
+    const mainStage = screen.getByTestId('album-main-stage');
+    const mainImg = within(mainStage).getByRole('img', { name: 'Cà phê đồi chè' });
+    expect(mainImg).toHaveAttribute('src', '/samples/memory-2.svg');
+
+    // Click main stage to open swipeable full-screen popup
+    await user.click(within(mainStage).getByRole('button', { name: /Phóng to xem ảnh 2/i }));
+    const popup = await screen.findByRole('dialog', { name: /Chuyến đi Đà Lạt 4 ngày/i });
+    expect(within(popup).getByText('2 / 4')).toBeInTheDocument();
+    const swipeStage = within(popup).getByTestId('album-popup-stage');
+
+    // Touch swipe left -> advance to photo #3
+    fireEvent.touchStart(swipeStage, { touches: [{ clientX: 280, clientY: 200 }] });
+    fireEvent.touchEnd(swipeStage, { changedTouches: [{ clientX: 130, clientY: 205 }] });
+    expect(within(popup).getByText('3 / 4')).toBeInTheDocument();
+
+    // Pointer swipe right -> go back to photo #2
+    fireEvent.pointerDown(swipeStage, { clientX: 100, clientY: 200 });
+    fireEvent.pointerUp(swipeStage, { clientX: 250, clientY: 204 });
+    expect(within(popup).getByText('2 / 4')).toBeInTheDocument();
+
+    // Keyboard ArrowRight / Escape
+    await user.keyboard('{ArrowRight}');
+    expect(within(popup).getByText('3 / 4')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(
+      screen.queryByRole('dialog', { name: /Chuyến đi Đà Lạt 4 ngày/i })
+    ).not.toBeInTheDocument();
+
+    // Dark Velvet & Crimson-Rose theme verification
+    const classTokens = Array.from(container.querySelectorAll('[class]')).flatMap((el) =>
+      (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+    );
+    for (const token of classTokens) {
+      expect(token).not.toBe('hover:brightness-110');
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*to-pink-500(?:\/|$)/);
+      const opacityMatch = token.match(
+        /^(?:[a-z0-9-]+:)*(?:bg|text|border|ring|from|via|to|divide|placeholder|fill|stroke)-.*\/(\d+)$/
+      );
+      if (opacityMatch) {
+        expect(Number(opacityMatch[1]) % 5).toBe(0);
+      }
+    }
+  });
+
+  test('MemoryAlbumDetailView renders mixed photo+video album, plays interactive <video controls> on stage & popup, auto-pauses active AudioToggle music, and keeps Dark Velvet palette', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    );
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+
+    const mixedAlbumMemory = {
+      id: 'mem-video-album',
+      memoryDate: '2026-06-01',
+      title: 'Đêm pháo hoa bên sông',
+      story: 'Giây phút rực rỡ bên nhau.',
+      imageUrl: '/uploads/cover.jpg',
+      imageAlt: 'Ảnh chụp bờ sông',
+      images: [
+        { url: '/uploads/cover.jpg', alt: 'Ảnh chụp bờ sông' },
+        { url: '/uploads/fireworks.mp4', alt: 'Clip pháo hoa đêm', mediaType: 'video' as const },
+      ],
+      sortOrder: 0,
+      createdAt: '2026-11-17T00:00:00.000Z',
+    };
+
+    const { container } = render(
+      <MemoryAlbumDetailView
+        memory={mixedAlbumMemory}
+        albumIndex={0}
+        totalAlbums={1}
+        settings={SAMPLE_DATA.settings}
+        currentUser={VIEWER_USER}
+      />
+    );
+
+    expect(screen.getByText('1 ảnh · 1 video')).toBeInTheDocument();
+    expect(screen.getByTestId('album-topbar')).toHaveClass('fixed', 'inset-x-0', 'top-0');
+
+    // Background music starts automatically on mount without needing a turn-on button
+    const playSpy = vi.mocked(HTMLMediaElement.prototype.play);
+    const pauseSpy = vi.mocked(HTMLMediaElement.prototype.pause);
+    expect(screen.getByTestId('ambient-music-pill')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Tạm dừng nhạc nền|Bật nhạc nền/i })
+    ).not.toBeInTheDocument();
+    expect(playSpy).toHaveBeenCalled();
+
+    // Click thumbnail #2 (video) -> main stage renders interactive <video controls> NOT inside a <button>
+    const thumbStrip = screen.getByTestId('album-thumbnail-strip');
+    const thumbButtons = within(thumbStrip).getAllByRole('button');
+    expect(thumbStrip.querySelectorAll('video')).toHaveLength(1);
+    await user.click(thumbButtons[1]);
+
+    const mainStage = screen.getByTestId('album-main-stage');
+    const stageVideo = mainStage.querySelector('video[controls]') as HTMLVideoElement | null;
+    expect(stageVideo).toBeInTheDocument();
+    expect(stageVideo).toHaveAttribute('src', '/uploads/fireworks.mp4');
+    expect(stageVideo?.closest('button')).toBeNull();
+
+    // Playing unmuted video ducks background music, and pausing video resumes background music automatically
+    pauseSpy.mockClear();
+    playSpy.mockClear();
+    fireEvent(stageVideo!, new Event('play'));
+    expect(pauseSpy).toHaveBeenCalled();
+    fireEvent(stageVideo!, new Event('pause'));
+    expect(playSpy).toHaveBeenCalled();
+
+    // Click popup trigger -> opens dialog with <video controls> inside album-popup-stage
+    await user.click(within(mainStage).getByRole('button', { name: /Phóng to xem video 2/i }));
+    const popup = await screen.findByRole('dialog', { name: /Đêm pháo hoa bên sông/i });
+    const popupStage = within(popup).getByTestId('album-popup-stage');
+    const popupVideo = popupStage.querySelector('video[controls]');
+    expect(popupVideo).toBeInTheDocument();
+    expect(popupVideo).toHaveAttribute('src', '/uploads/fireworks.mp4');
+
+    // Theme rules
+    const classTokens = Array.from(container.querySelectorAll('[class]')).flatMap((el) =>
+      (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)
+    );
+    for (const token of classTokens) {
+      expect(token).not.toBe('hover:brightness-110');
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*(?:sky|indigo|blue|violet|purple|slate)-/);
+      expect(token).not.toMatch(/^(?:[a-z0-9-]+:)*bg-white(?:\/|$)/);
+    }
+  });
+
+  test('DailyDiarySection accepts dropping an .mp4 video, uploads with kind=video, and renders <video controls> on saved diary card', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:diary-video-preview'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    let requestedUploadKind: string | null = null;
+    let formDataKind: unknown = null;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url === '/api/diary/upload-url' && init?.method === 'POST') {
+          const body = JSON.parse(String(init.body || '{}')) as { kind?: string };
+          requestedUploadKind = body.kind ?? null;
+          return new Response(
+            JSON.stringify({ mode: 'local', uploadEndpoint: '/api/diary/upload' }),
+            { status: 200 }
+          );
+        }
+        if (url === '/api/diary/upload' && init?.method === 'POST') {
+          const fd = init.body as FormData;
+          formDataKind = fd.get('kind');
+          return new Response(
+            JSON.stringify({ publicUrl: '/uploads/1731840000-aa11bb22-walk.mp4' }),
+            { status: 200 }
+          );
+        }
+        if (url === '/api/diary' && init?.method === 'POST') {
+          const body = JSON.parse(String(init.body || '{}')) as Record<string, unknown>;
+          return new Response(
+            JSON.stringify({
+              entry: {
+                id: 'diary-video-new',
+                entryDate: String(body.entryDate),
+                title: String(body.title || ''),
+                content: String(body.content),
+                mood: String(body.mood || 'loved'),
+                imageUrl: String(body.imageUrl || ''),
+                imageAlt: String(body.imageAlt || 'Video nhật ký'),
+                authorId: VIEWER_USER.id,
+                authorUsername: VIEWER_USER.username,
+                authorDisplayName: VIEWER_USER.displayName,
+                authorRole: 'viewer',
+                createdAt: '2026-11-17T18:00:00.000Z',
+                updatedAt: '2026-11-17T18:00:00.000Z',
+              },
+            }),
+            { status: 201 }
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      })
+    );
+
+    render(
+      <DailyDiarySection
+        coupleTitle={SAMPLE_DATA.settings.coupleTitle}
+        initialEntries={[]}
+        currentUser={VIEWER_USER}
+      />
+    );
+
+    const videoFile = new File([new Uint8Array([1, 2, 3, 4])], 'evening-walk.mp4', {
+      type: 'video/mp4',
+    });
+    fireEvent.drop(screen.getByTestId('diary-quick-dropzone'), {
+      dataTransfer: { files: [videoFile], types: ['Files'] },
+    });
+
+    expect(screen.getByText(/Đã chọn: evening-walk\.mp4/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Xem trước video nhật ký/i)).toHaveAttribute(
+      'src',
+      'blob:diary-video-preview'
+    );
+
+    await user.type(
+      screen.getByLabelText(/Nội dung nhật ký/i),
+      'Đoạn video tụi mình đi dạo buổi tối.'
+    );
+    await user.click(screen.getByRole('button', { name: /Lưu trang nhật ký/i }));
+
+    const savedCard = await screen.findByTestId('diary-card-diary-video-new');
+    expect(requestedUploadKind).toBe('video');
+    expect(formDataKind).toBe('video');
+    const cardVideo = savedCard.querySelector('video[controls]');
+    expect(cardVideo).toBeInTheDocument();
+    expect(cardVideo).toHaveAttribute('src', '/uploads/1731840000-aa11bb22-walk.mp4');
+  });
+});
+
+describe('AudioToggle always-on ambient autoplay', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test('unlocks and auto-starts playback on first user gesture if browser blocks cold autoplay', async () => {
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockRejectedValueOnce(new Error('NotAllowedError'))
+      .mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const onAutoStart = vi.fn();
+
+    render(<AudioToggle inline musicUrl="/samples/gentle-memories.wav" onAutoStart={onAutoStart} />);
+
+    await waitFor(() => {
+      expect(playSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(onAutoStart).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(document);
+    await waitFor(() => {
+      expect(playSpy).toHaveBeenCalledTimes(2);
+      expect(onAutoStart).toHaveBeenCalledTimes(1);
+    });
+
+    // Subsequent clicks do not re-trigger unlock play listener once started
+    fireEvent.pointerDown(document);
+    expect(playSpy).toHaveBeenCalledTimes(2);
   });
 });
