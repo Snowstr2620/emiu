@@ -11,7 +11,6 @@ import { EnvelopeLetter } from '@/components/story/EnvelopeLetter';
 import { HeroSection } from '@/components/story/HeroSection';
 import { LoveEffectsLayer } from '@/components/story/LoveEffectsLayer';
 import { MemoryTimeline } from '@/components/story/MemoryTimeline';
-import { PhotoLightbox } from '@/components/story/PhotoLightbox';
 import { PixelHeartIntro } from '@/components/story/PixelHeartIntro';
 import { useModalFocusTrap } from '@/lib/useModalFocusTrap';
 import type { ActivityEventType, DiaryEntry, PublicSiteData, SafeAppUser } from '@/types/memories';
@@ -84,7 +83,6 @@ export function StoryExperience({
   const initialDiaryEntries = data.diaryEntries ?? EMPTY_DIARY_ENTRIES;
   const [activeSection, setActiveSection] = useState<'story' | 'diary'>('story');
   const [diaryCount, setDiaryCount] = useState<number>(initialDiaryEntries.length);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showHeartModal, setShowHeartModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -180,21 +178,6 @@ export function StoryExperience({
       timelineEl.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth' });
     }
   }, []);
-
-  const handleOpenPhoto = useCallback(
-    (index: number) => {
-      setSelectedIndex(index);
-      const memory = memories[index];
-      if (memory) {
-        trackActivity(
-          'memory_viewed',
-          `Ngắm kỷ niệm: ${memory.title || memory.memoryDate}`,
-          { memoryId: memory.id, title: memory.title || '' }
-        );
-      }
-    },
-    [memories, trackActivity]
-  );
 
   const handleLetterOpen = useCallback(() => {
     trackActivity('letter_opened', 'Mở phong thư tâm sự');
@@ -465,7 +448,7 @@ export function StoryExperience({
                 onStartJourney={handleStartJourney}
               />
 
-              <MemoryTimeline memories={memories} onOpenPhoto={handleOpenPhoto} />
+              <MemoryTimeline memories={memories} />
 
               <EnvelopeLetter
                 letterTitle={settings.letterTitle}
@@ -492,13 +475,6 @@ export function StoryExperience({
             </span>
           </p>
         </footer>
-
-        <PhotoLightbox
-          memories={memories}
-          selectedIndex={selectedIndex}
-          onClose={() => setSelectedIndex(null)}
-          onSelectIndex={handleOpenPhoto}
-        />
 
         {showHeartModal && (
           <div

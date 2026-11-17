@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, CalendarHeart, Heart, Images, LayoutGrid, List, Maximize2, Play } from 'lucide-react';
+import { CalendarHeart, Heart, Images, LayoutGrid, List, Play } from 'lucide-react';
 import { formatMemoryDateVi } from '@/lib/date-utils';
 import {
   formatAlbumMediaCountVi,
@@ -15,12 +15,11 @@ import { MemoryItem } from '@/types/memories';
 
 interface MemoryTimelineProps {
   memories: MemoryItem[];
-  onOpenPhoto: (index: number) => void;
 }
 
 type ViewMode = 'bento' | 'stream';
 
-export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
+export function MemoryTimeline({ memories }: MemoryTimelineProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('bento');
 
   function isTrailingOddCard(index: number): boolean {
@@ -111,7 +110,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
           }
         >
           {memories.map((memory, index) => {
-            const zoomLabel = `Phóng to ảnh: ${
+            const detailLabel = `Xem chi tiết kỷ niệm: ${
               memory.title || formatMemoryDateVi(memory.memoryDate)
             }`;
             const indexLabel = `#${String(index + 1).padStart(2, '0')}`;
@@ -132,7 +131,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.12 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
-                className={`godly-bento-card flex flex-col overflow-hidden rounded-3xl p-4 sm:p-5 ${getBentoSpanClass(
+                className={`godly-bento-card group relative flex flex-col overflow-hidden rounded-3xl p-4 transition hover:shadow-[0_16px_40px_rgba(220,38,38,0.14)] sm:p-5 ${getBentoSpanClass(
                   index
                 )}`}
               >
@@ -159,11 +158,9 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                   </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onOpenPhoto(index)}
-                  aria-label={zoomLabel}
-                  className={`group relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-amber-300/70 bg-[#FEF9C3]/55 p-2 text-left focus:outline-none focus:ring-2 focus:ring-red-500/60 md:min-h-[240px] ${
+                <div
+                  data-testid="memory-cover"
+                  className={`relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-amber-300/70 bg-[#FEF9C3]/55 p-2 md:min-h-[240px] ${
                     viewMode === 'bento' && memories.length > 1 && !isTrailingOddCard(index)
                       ? 'md:h-[300px] lg:h-[360px]'
                       : ''
@@ -215,12 +212,12 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                       </>
                     ) : (
                       <>
-                        <Maximize2 className="h-3 w-3 text-red-600" />
-                        <span>Phóng to</span>
+                        <Images className="h-3 w-3 text-red-600" />
+                        <span>Xem album</span>
                       </>
                     )}
                   </span>
-                </button>
+                </div>
 
                 {photoCount > 1 && (
                   <div className="mt-2.5 grid grid-cols-4 gap-2">
@@ -228,11 +225,9 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                       const showMoreOverlay = thumbIdx === 3 && extraCount > 0;
                       const thumbIsVideo = isVideoMediaItem(thumb);
                       return (
-                        <Link
+                        <div
                           key={`${memory.id}-thumb-${thumbIdx}`}
-                          href={`/memories/${memory.id}`}
-                          aria-label={`Mở album xem mục ${thumbIdx + 1}: ${memory.title || memory.memoryDate}`}
-                          className="group relative aspect-square overflow-hidden rounded-xl border border-amber-300/75 bg-[#FEF9C3]/55 transition hover:border-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                          className="relative aspect-square overflow-hidden rounded-xl border border-amber-300/75 bg-[#FEF9C3]/55"
                         >
                           {thumbIsVideo ? (
                             <>
@@ -260,7 +255,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                               alt={thumb.alt}
                               loading="lazy"
                               decoding="async"
-                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105 motion-reduce:transition-none"
+                              className="h-full w-full object-cover"
                             />
                           )}
                           {showMoreOverlay && (
@@ -268,7 +263,7 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                               +{extraCount}
                             </span>
                           )}
-                        </Link>
+                        </div>
                       );
                     })}
                   </div>
@@ -289,26 +284,13 @@ export function MemoryTimeline({ memories, onOpenPhoto }: MemoryTimelineProps) {
                       {memory.story}
                     </p>
                   </div>
-
-                  <div className="pt-1">
-                    <Link
-                      href={`/memories/${memory.id}`}
-                      className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-100/80 px-3.5 py-2 text-xs font-semibold text-stone-900 transition hover:border-red-300 hover:bg-amber-200/80 hover:text-stone-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:min-h-[38px] sm:w-auto sm:py-1.5"
-                    >
-                      <Images className="h-3.5 w-3.5 shrink-0 text-red-600" />
-                      <span>
-                        {!hasAnyVideo
-                          ? photoCount > 1
-                            ? `Xem chi tiết album (${photoCount} ảnh)`
-                            : 'Xem chi tiết album'
-                          : photoCount > 1
-                            ? `Xem chi tiết album (${mediaCountLabel})`
-                            : 'Xem chi tiết video & kỷ niệm'}
-                      </span>
-                      <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-                    </Link>
-                  </div>
                 </div>
+                <Link
+                  href={`/memories/${memory.id}`}
+                  aria-label={detailLabel}
+                  data-testid="memory-card-link"
+                  className="absolute inset-0 z-10 rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500"
+                />
               </motion.article>
             );
           })}

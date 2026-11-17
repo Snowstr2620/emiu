@@ -387,7 +387,7 @@ export function ViewerPasscodeGate({
                         setError('');
                       }}
                       autoComplete="username"
-                      placeholder="Ví dụ: nguoithuong"
+                      placeholder="Nhập tên tài khoản..."
                       required
                       className="w-full rounded-2xl border border-amber-300/80 bg-[#FFFDF5] px-4 py-3 text-base text-stone-900 placeholder:text-stone-500 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20 sm:text-sm"
                     />

@@ -184,91 +184,21 @@ describe('StoryExperience UI components', () => {
     expect(screen.getByText(/Chưa có kỷ niệm nào/i)).toBeInTheDocument();
   });
 
-  test('opens PhotoLightbox when clicking a memory photo, navigates prev/next with memory_viewed telemetry, preserves responsive stage classes, and closes on dismiss', async () => {
-    const user = userEvent.setup();
+  test('tapping anywhere on a timeline card opens that memory detail page (no lightbox, no extra button)', () => {
     render(<StoryExperience data={SAMPLE_DATA} currentUser={VIEWER_USER} />);
 
-    const photoTrigger = screen.getByRole('button', {
-      name: /Phóng to ảnh: Buổi chiều mưa đầu tiên/i,
+    const cardLink = screen.getByRole('link', {
+      name: /Xem chi tiết kỷ niệm: Buổi chiều mưa đầu tiên/i,
     });
-    photoTrigger.focus();
-    await user.click(photoTrigger);
+    expect(cardLink).toHaveAttribute('href', '/memories/mem-1');
+    expect(cardLink).toHaveClass('absolute', 'inset-0', 'z-10');
+    // The link covers the whole card, so it sits directly inside the <article>
+    expect(cardLink.parentElement?.tagName).toBe('ARTICLE');
+    expect(cardLink.parentElement).toHaveClass('relative');
 
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
-    expect(within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.')).toBeInTheDocument();
-
-    const closeBtn = within(dialog).getByRole('button', { name: /Đóng xem ảnh/i });
-    const prevBtn = within(dialog).getByRole('button', { name: /Ảnh trước/i });
-    const nextBtn = within(dialog).getByRole('button', { name: /Ảnh tiếp theo/i });
-
-    // WCAG modal focus management & focus-visible rings
-    expect(closeBtn).toHaveFocus();
-    for (const btn of [closeBtn, prevBtn, nextBtn]) {
-      expect(btn).toHaveClass(
-        'focus-visible:outline-none',
-        'focus-visible:ring-2',
-        'focus-visible:ring-red-500'
-      );
-    }
-
-    await user.tab();
-    expect(prevBtn).toHaveFocus();
-    await user.tab();
-    expect(nextBtn).toHaveFocus();
-    await user.tab();
-    expect(closeBtn).toHaveFocus();
-    await user.tab({ shift: true });
-    expect(nextBtn).toHaveFocus();
-
-    const img = within(dialog).getByRole('img', { name: /Quán trà chiều mưa/i });
-    expect(img).toHaveClass('max-h-[calc(48vh-1rem)]', 'sm:max-h-[calc(56vh-1rem)]');
-    expect(img).not.toHaveClass('max-h-full');
-    expect(dialog).toHaveClass(
-      'bg-stone-950/60',
-      'overflow-y-auto',
-      'overscroll-contain',
-      'items-start',
-      'sm:items-center'
-    );
-    expect(dialog.firstElementChild).toHaveClass(
-      'my-auto',
-      '[@media(min-height:560px)]:max-h-[92vh]'
-    );
-    expect(dialog.firstElementChild).not.toHaveClass('max-h-[92vh]');
-    expect(img.parentElement).toHaveClass(
-      'shrink-0',
-      'min-h-[160px]',
-      'max-h-[48vh]',
-      '[@media(min-height:560px)]:sm:min-h-[200px]'
-    );
-    expect(img.parentElement).not.toHaveClass('sm:min-h-[200px]');
-    const captionContainer = within(dialog).getByText('Ngồi trú mưa cùng hai ly trà ấm.').parentElement;
-    expect(captionContainer).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
-
-    // Navigate next and previous without stealing focus back to Close button
-    await user.click(nextBtn);
-    expect(within(dialog).getByText('Hoàng hôn trên đồi')).toBeInTheDocument();
-    expect(closeBtn).not.toHaveFocus();
-    await user.click(prevBtn);
-    expect(within(dialog).getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
-
-    const memoryViewedCalls = getActivityCalls(fetchSpy).filter(
-      (c) => c.eventType === 'memory_viewed'
-    );
-    expect(memoryViewedCalls).toHaveLength(3);
-    expect(memoryViewedCalls[0].metadata).toEqual({
-      memoryId: 'mem-1',
-      title: 'Buổi chiều mưa đầu tiên',
-    });
-    expect(memoryViewedCalls[1].metadata).toEqual({
-      memoryId: 'mem-2',
-      title: 'Hoàng hôn trên đồi',
-    });
-
-    await user.click(closeBtn);
+    expect(screen.queryByRole('button', { name: /Phóng to ảnh:/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Xem chi tiết album/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(photoTrigger).toHaveFocus();
   });
 
   test('reveals love letter paragraphs and signature only after tapping the sealed envelope and records letter_opened', async () => {
@@ -591,10 +521,8 @@ describe('StoryExperience UI components', () => {
     expect(bentoBtn).toHaveClass('to-red-500');
 
     // Equalized paired Bento media stages
-    const card1PhotoBtn = screen.getByRole('button', {
-      name: /Phóng to ảnh: Buổi chiều mưa đầu tiên/i,
-    });
-    expect(card1PhotoBtn).toHaveClass('flex', 'items-center', 'justify-center', 'md:min-h-[240px]');
+    const card1Cover = screen.getAllByTestId('memory-cover')[0];
+    expect(card1Cover).toHaveClass('flex', 'items-center', 'justify-center', 'md:min-h-[240px]');
 
     // Trailing odd memory (>= 3) spans full desktop & tablet width (lg:col-span-12)
     rerender(
@@ -1408,14 +1336,13 @@ describe('Multi-photo album timeline cards & /memories/[id] e-commerce detail sh
     render(<StoryExperience data={albumMemoryData} currentUser={VIEWER_USER} />);
 
     expect(screen.getByText('3 ảnh')).toBeInTheDocument();
-    const detailLink = screen.getByRole('link', { name: /Xem chi tiết album/i });
+    const detailLink = screen.getByRole('link', {
+      name: /Xem chi tiết kỷ niệm: Đà Lạt nhiều ảnh/i,
+    });
     expect(detailLink).toHaveAttribute('href', '/memories/mem-album-1');
-
-    // Quick lightbox still opens on cover click and offers deep link into full album
-    await user.click(screen.getByRole('button', { name: /Phóng to ảnh: Đà Lạt nhiều ảnh/i }));
-    const dialog = await screen.findByRole('dialog');
-    const deepLink = within(dialog).getByRole('link', { name: /Xem trọn bộ album \(3 ảnh\)/i });
-    expect(deepLink).toHaveAttribute('href', '/memories/mem-album-1');
+    // Mini preview strip is decorative; the whole card is the single link
+    expect(screen.getAllByRole('link', { name: /Đà Lạt nhiều ảnh/i })).toHaveLength(1);
+    expect(screen.getByText('Xem album')).toBeInTheDocument();
   });
 
   test('MemoryAlbumDetailView renders 2-column gallery, updates stage on thumbnail click, opens swipeable Popup Lightbox (touch + pointer + keyboard), and follows Dark Velvet theme', async () => {
@@ -1470,6 +1397,12 @@ describe('Multi-photo album timeline cards & /memories/[id] e-commerce detail sh
     await user.click(thumbButtons[1]);
     expect(thumbButtons[1]).toHaveAttribute('aria-pressed', 'true');
     const mainStage = screen.getByTestId('album-main-stage');
+    // Phone layout: the single column may not grow wider than the screen because of the thumbnail strip
+    const layoutGrid = mainStage.closest('.grid') as HTMLElement;
+    expect(layoutGrid).toHaveClass('grid-cols-[minmax(0,1fr)]', 'lg:grid-cols-12');
+    for (const column of Array.from(layoutGrid.children)) {
+      expect(column).toHaveClass('min-w-0');
+    }
     const mainImg = within(mainStage).getByRole('img', { name: 'Cà phê đồi chè' });
     expect(mainImg).toHaveAttribute('src', '/samples/memory-2.svg');
 

@@ -94,7 +94,7 @@ export function AdminLoginForm({ showDevDefaultHint = false }: AdminLoginFormPro
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="VD: admin"
+                placeholder="Nhập tên tài khoản..."
                 autoComplete="username"
                 required
                 className="w-full rounded-2xl border border-amber-300/80 bg-[#FFFDF5] py-3 pl-10 pr-4 text-base text-stone-900 placeholder:text-stone-500 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20 sm:text-sm"

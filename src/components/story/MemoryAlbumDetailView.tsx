@@ -227,9 +227,9 @@ export function MemoryAlbumDetailView({
 
         {/* E-Commerce Product Detail 2-Column Showcase */}
         <main className="relative z-10 mx-auto max-w-6xl px-3.5 pb-16 pt-20 sm:px-6 sm:pb-20 sm:pt-24 lg:px-8">
-          <div className="grid gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
             {/* Left Column: Product-Style Main Image + Thumbnail Strip */}
-            <div className="space-y-4 lg:sticky lg:top-24 lg:col-span-7">
+            <div className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:col-span-7">
               <div className="glass-card relative overflow-hidden rounded-3xl p-2.5 sm:p-4">
                 <div
                   data-testid="album-main-stage"
@@ -402,7 +402,7 @@ export function MemoryAlbumDetailView({
             </div>
 
             {/* Right Column: Editorial Story & Album Metadata */}
-            <div className="space-y-5 lg:col-span-5">
+            <div className="min-w-0 space-y-5 lg:col-span-5">
               <div className="glass-card space-y-5 rounded-3xl p-4 sm:p-8">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/80 bg-amber-100/80 px-3 py-1 text-xs font-semibold text-amber-950">
