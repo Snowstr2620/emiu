@@ -168,7 +168,7 @@ describe('StoryExperience UI components', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Minh & Lan' })).toBeInTheDocument();
     expect(screen.getByTestId('story-topbar')).toHaveTextContent('Minh & Lan');
-    expect(screen.getByText(/ngày bên nhau/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ngày bên nhau/i)).not.toBeInTheDocument();
     expect(screen.getByText('Buổi chiều mưa đầu tiên')).toBeInTheDocument();
     expect(screen.getByText('Hoàng hôn trên đồi')).toBeInTheDocument();
 

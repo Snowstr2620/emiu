@@ -2,14 +2,13 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDown, Heart, Sparkles } from 'lucide-react';
+import { ArrowDown, Sparkles } from 'lucide-react';
 import { formatMemoryDateVi } from '@/lib/date-utils';
 
 interface HeroSectionProps {
   coupleTitle: string;
   heroSubtitle: string;
   loveStartDate: string;
-  daysTogether: number;
   memoriesCount?: number;
   onStartJourney: () => void;
 }
@@ -18,7 +17,6 @@ export function HeroSection({
   coupleTitle,
   heroSubtitle,
   loveStartDate,
-  daysTogether,
   memoriesCount,
   onStartJourney,
 }: HeroSectionProps) {
@@ -44,27 +42,7 @@ export function HeroSection({
         </p>
 
         {/* Hero Bento Metrics Strip */}
-        <div className="mt-8 grid w-full max-w-xl grid-cols-1 gap-3.5 sm:grid-cols-2">
-          <div className="relative">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -inset-1.5 rounded-3xl bg-gradient-to-r from-amber-200/60 via-yellow-200/50 to-red-200/40 blur-xl"
-            />
-            <div className="godly-bento-card love-pulse-glow relative flex h-full items-center gap-3.5 rounded-2xl p-3.5 text-left sm:p-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 shadow-inner">
-                <Heart className="h-5 w-5 fill-red-500 text-red-500" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-900/80">
-                  CÙNG NHAU ĐI QUA
-                </p>
-                <p className="love-shimmer bg-gradient-to-r from-red-700 via-red-600 to-rose-600 bg-clip-text text-lg font-bold text-transparent sm:text-xl">
-                  {daysTogether.toLocaleString('vi-VN')} ngày bên nhau
-                </p>
-              </div>
-            </div>
-          </div>
-
+        <div className="mt-8 grid w-full max-w-sm grid-cols-1 gap-3.5">
           <div className="godly-bento-card relative flex h-full items-center gap-3.5 rounded-2xl p-3.5 text-left sm:p-4">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-300/80 bg-amber-100/80 text-red-600">
               <Sparkles className="h-5 w-5" />

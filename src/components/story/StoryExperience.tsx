@@ -13,7 +13,6 @@ import { LoveEffectsLayer } from '@/components/story/LoveEffectsLayer';
 import { MemoryTimeline } from '@/components/story/MemoryTimeline';
 import { PhotoLightbox } from '@/components/story/PhotoLightbox';
 import { PixelHeartIntro } from '@/components/story/PixelHeartIntro';
-import { calculateDaysTogether } from '@/lib/date-utils';
 import { useModalFocusTrap } from '@/lib/useModalFocusTrap';
 import type { ActivityEventType, DiaryEntry, PublicSiteData, SafeAppUser } from '@/types/memories';
 
@@ -104,7 +103,6 @@ export function StoryExperience({
     initialFocusRef: heartCloseButtonRef,
   });
 
-  const daysTogether = calculateDaysTogether(settings.loveStartDate);
   const currentUserId = currentUser?.id ?? null;
   const visitStorageKey = `ny_visit_logged:${currentUserId ?? 'guest'}`;
 
@@ -463,7 +461,6 @@ export function StoryExperience({
                 coupleTitle={settings.coupleTitle}
                 heroSubtitle={settings.heroSubtitle}
                 loveStartDate={settings.loveStartDate}
-                daysTogether={daysTogether}
                 memoriesCount={memories.length}
                 onStartJourney={handleStartJourney}
               />
