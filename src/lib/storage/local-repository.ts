@@ -90,6 +90,7 @@ function isUrlReferencedInDb(db: LocalDbSchema, url: string): boolean {
   if (!trimmed) return false;
   if (db.settings.musicUrl === trimmed) return true;
   if (getMusicPlaylist(db.settings).includes(trimmed)) return true;
+  if (db.settings.faviconUrl === trimmed) return true;
   if (db.memories.some((m) => m.imageUrl === trimmed || getMemoryImages(m).some((i) => i.url === trimmed))) {
     return true;
   }
@@ -216,6 +217,7 @@ export class LocalStorageRepository implements StorageRepository {
     return this.withWriteLock(async () => {
       const db = this.readDb();
       const previousTracks = [db.settings.musicUrl, ...getMusicPlaylist(db.settings)];
+      const previousFavicon = db.settings.faviconUrl ?? '';
 
       const nextHash = input.viewerPasscode
         ? hashPasscode(input.viewerPasscode)
@@ -228,6 +230,8 @@ export class LocalStorageRepository implements StorageRepository {
         musicUrl: input.musicUrl,
         musicPlaylist: input.musicPlaylist,
         musicEnabled: input.musicEnabled,
+        siteTitle: input.siteTitle,
+        faviconUrl: input.faviconUrl,
         letterTitle: input.letterTitle,
         letterBody: input.letterBody,
         letterSignature: input.letterSignature,
@@ -238,7 +242,7 @@ export class LocalStorageRepository implements StorageRepository {
 
       this.writeDb(db);
 
-      for (const url of new Set(previousTracks)) {
+      for (const url of new Set([...previousTracks, previousFavicon])) {
         if (url && !isUrlReferencedInDb(db, url)) {
           await this.deleteStoredFileByUrl(url);
         }

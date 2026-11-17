@@ -84,6 +84,10 @@ export interface SiteSettings {
   /** Ordered background-music playlist; plays in order and loops back to the first track. */
   musicPlaylist?: string[];
   musicEnabled: boolean;
+  /** Browser-tab title; empty = built-in default. */
+  siteTitle?: string;
+  /** Browser-tab icon (favicon) URL; empty = built-in heart icon. */
+  faviconUrl?: string;
   letterTitle: string;
   letterBody: string;
   letterSignature: string;

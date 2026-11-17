@@ -8,12 +8,28 @@ import '@fontsource/cormorant-garamond/400-italic.css';
 import '@fontsource/cormorant-garamond/600-italic.css';
 import './globals.css';
 import { AmbientAudioProvider } from '@/components/story/AudioToggle';
+import { getSiteBranding } from '@/lib/site-branding';
+import { getStorageRepository } from '@/lib/storage';
 
-export const metadata: Metadata = {
-  title: 'Miền Ký Ức Yêu Thương · Chỉ Riêng Hai Đứa',
-  description:
-    'Nơi cất giữ từng nhịp tim rung động, những bức ảnh ngập tràn thương nhớ và bức tâm thư dịu dàng gửi em bé yêu.',
-};
+// Tab title and icon come from admin settings, so every page is rendered per request
+// (this also keeps `next build` from reading or seeding the production database).
+export const dynamic = 'force-dynamic';
+
+export async function generateMetadata(): Promise<Metadata> {
+  let settings = null;
+  try {
+    settings = (await getStorageRepository().getPublicData()).settings;
+  } catch {
+    // Storage not ready (e.g. missing production config): fall back to the defaults.
+  }
+  const { siteTitle, faviconUrl } = getSiteBranding(settings);
+  return {
+    title: siteTitle,
+    description:
+      'Nơi cất giữ từng nhịp tim rung động, những bức ảnh ngập tràn thương nhớ và bức tâm thư dịu dàng gửi em bé yêu.',
+    icons: { icon: faviconUrl, shortcut: faviconUrl, apple: faviconUrl },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#FFFBEB',

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { parseIsoDateParts } from '@/lib/date-utils';
 import { isVideoMediaUrl, MAX_ALBUM_IMAGES } from '@/lib/memory-album';
 import { MAX_MUSIC_TRACKS, normalizePlaylist } from '@/lib/music-playlist';
+import { MAX_SITE_TITLE_LENGTH } from '@/lib/site-branding';
 import type { ActivityEventType, DiaryMood, MemoryImageItem, UserRole } from '@/types/memories';
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -312,6 +313,8 @@ export interface ValidatedSettingsPayload {
   musicUrl: string;
   musicPlaylist: string[];
   musicEnabled: boolean;
+  siteTitle: string;
+  faviconUrl: string;
   letterTitle: string;
   letterBody: string;
   letterSignature: string;
@@ -332,6 +335,8 @@ export function validateSettingsPayload(
   const loveStartDate = typeof r.loveStartDate === 'string' ? r.loveStartDate.trim() : '';
   const musicUrl = typeof r.musicUrl === 'string' ? r.musicUrl.trim() : '';
   const musicEnabled = Boolean(r.musicEnabled);
+  const siteTitle = typeof r.siteTitle === 'string' ? r.siteTitle.trim() : '';
+  const faviconUrl = typeof r.faviconUrl === 'string' ? r.faviconUrl.trim() : '';
   const letterTitle = typeof r.letterTitle === 'string' ? r.letterTitle.trim() : '';
   const letterBody = typeof r.letterBody === 'string' ? r.letterBody.trim() : '';
   const letterSignature = typeof r.letterSignature === 'string' ? r.letterSignature.trim() : '';
@@ -358,6 +363,12 @@ export function validateSettingsPayload(
   if (musicPlaylist.some((url) => !isValidMediaUrl(url))) {
     return { error: 'Đường dẫn nhạc nền không hợp lệ.' };
   }
+  if (siteTitle.length > MAX_SITE_TITLE_LENGTH) {
+    return { error: `Tiêu đề tab tối đa ${MAX_SITE_TITLE_LENGTH} ký tự.` };
+  }
+  if (faviconUrl && (!isValidMediaUrl(faviconUrl) || isVideoMediaUrl(faviconUrl))) {
+    return { error: 'Biểu tượng tab phải là đường dẫn ảnh hợp lệ.' };
+  }
   if (!letterTitle || !letterBody) {
     return { error: 'Vui lòng nhập tiêu đề và nội dung bức tâm thư.' };
   }
@@ -373,6 +384,8 @@ export function validateSettingsPayload(
       musicUrl: musicPlaylist[0] ?? musicUrl,
       musicPlaylist,
       musicEnabled,
+      siteTitle,
+      faviconUrl,
       letterTitle: letterTitle.slice(0, 140),
       letterBody: letterBody.slice(0, 6000),
       letterSignature: letterSignature.slice(0, 120),

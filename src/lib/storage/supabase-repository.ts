@@ -58,6 +58,9 @@ interface DbSettingsRow {
   /** jsonb array of track URLs; may be absent on databases created before playlists existed. */
   music_playlist?: unknown;
   music_enabled: boolean;
+  /** May be absent on databases created before tab branding existed. */
+  site_title?: string | null;
+  favicon_url?: string | null;
   letter_title: string;
   letter_body: string;
   letter_signature: string;
@@ -129,6 +132,8 @@ function mapSettingsRow(row: DbSettingsRow): SiteSettings {
     musicUrl: row.music_url,
     musicPlaylist: normalizePlaylist(row.music_playlist),
     musicEnabled: row.music_enabled,
+    siteTitle: row.site_title ?? '',
+    faviconUrl: row.favicon_url ?? '',
     letterTitle: row.letter_title,
     letterBody: row.letter_body,
     letterSignature: row.letter_signature,
@@ -468,6 +473,8 @@ export class SupabaseStorageRepository implements StorageRepository {
           music_url: input.musicUrl,
           music_playlist: input.musicPlaylist,
           music_enabled: input.musicEnabled,
+          site_title: input.siteTitle,
+          favicon_url: input.faviconUrl,
           letter_title: input.letterTitle,
           letter_body: input.letterBody,
           letter_signature: input.letterSignature,
@@ -484,8 +491,12 @@ export class SupabaseStorageRepository implements StorageRepository {
       throw new Error(`Không thể lưu cài đặt Supabase: ${error?.message}`);
     }
 
-    const nextTracks = new Set([input.musicUrl, ...input.musicPlaylist]);
-    for (const url of new Set([current.musicUrl, ...getMusicPlaylist(current)])) {
+    const nextTracks = new Set([input.musicUrl, ...input.musicPlaylist, input.faviconUrl]);
+    for (const url of new Set([
+      current.musicUrl,
+      ...getMusicPlaylist(current),
+      current.faviconUrl ?? '',
+    ])) {
       if (url && !nextTracks.has(url) && !(await this.isMediaUrlReferenced(url))) {
         await this.deleteStoredFileByUrl(url);
       }
@@ -809,6 +820,7 @@ export class SupabaseStorageRepository implements StorageRepository {
 
     if (settingsRow?.music_url === trimmed) return true;
     if (normalizePlaylist(settingsRow?.music_playlist).includes(trimmed)) return true;
+    if (settingsRow?.favicon_url === trimmed) return true;
     if (
       Array.isArray(memRows) &&
       memRows.some(

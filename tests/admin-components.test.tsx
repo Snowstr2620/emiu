@@ -499,6 +499,80 @@ describe('AdminDashboard 5-tab UI', () => {
     expect(screen.getByText('song-1.mp3')).toBeInTheDocument();
   });
 
+  test('Tab 2 sets the browser tab title and icon with a live preview and saves them', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock-favicon'),
+      revokeObjectURL: vi.fn(),
+    });
+    const initial = makeInitialData();
+    const uploadKinds: string[] = [];
+    fetchSpy.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/admin/upload-url') {
+        uploadKinds.push(JSON.parse(String(init?.body)).kind);
+        return new Response(
+          JSON.stringify({ mode: 'local', uploadEndpoint: '/api/admin/upload' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/upload' && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({ publicUrl: '/uploads/1731840000000-bbbb2222-icon.png' }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/admin/settings') {
+        const body = JSON.parse(String(init?.body));
+        return new Response(JSON.stringify({ settings: { ...initial.settings, ...body } }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ error: 'Unexpected' }), { status: 500 });
+    });
+
+    render(<AdminDashboard initialData={initial} storageStatus={STORAGE_STATUS} />);
+    await user.click(screen.getByRole('button', { name: /Mở đầu, Nhạc nền & Riêng tư/i }));
+
+    const preview = screen.getByTestId('browser-tab-preview');
+    expect(preview).toHaveTextContent('Miền Ký Ức Yêu Thương · Chỉ Riêng Hai Đứa');
+    expect(preview.querySelector('img')).toHaveAttribute('src', '/samples/favicon-heart.svg');
+
+    await user.type(screen.getByLabelText('Tiêu đề tab'), 'Nhà của tụi mình');
+    expect(preview).toHaveTextContent('Nhà của tụi mình');
+
+    await user.upload(
+      screen.getByLabelText('Tải ảnh biểu tượng tab'),
+      new File(['png'], 'icon.png', { type: 'image/png' })
+    );
+    expect(preview.querySelector('img')).toHaveAttribute('src', 'blob:mock-favicon');
+    expect(screen.getByText('icon.png')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Lưu cài đặt/i }));
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/admin/settings',
+        expect.objectContaining({ method: 'PUT' })
+      );
+    });
+    expect(uploadKinds).toEqual(['image']);
+    const settingsCall = fetchSpy.mock.calls.find(([url]) => url === '/api/admin/settings');
+    const sentBody = JSON.parse(String((settingsCall?.[1] as RequestInit).body));
+    expect(sentBody.siteTitle).toBe('Nhà của tụi mình');
+    expect(sentBody.faviconUrl).toBe('/uploads/1731840000000-bbbb2222-icon.png');
+
+    // Back to the default heart icon
+    await waitFor(() => {
+      expect(preview.querySelector('img')).toHaveAttribute(
+        'src',
+        '/uploads/1731840000000-bbbb2222-icon.png'
+      );
+    });
+    await user.click(screen.getByRole('button', { name: 'Dùng trái tim mặc định' }));
+    expect(preview.querySelector('img')).toHaveAttribute('src', '/samples/favicon-heart.svg');
+  });
+
   test('Tab 2 saves settings without legacy viewerPasscode and offers quick jump to Tab 4', async () => {
     const user = userEvent.setup();
     const initial = makeInitialData();

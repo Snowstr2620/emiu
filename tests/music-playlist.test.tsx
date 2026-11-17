@@ -170,4 +170,63 @@ describe('ambient playlist player', () => {
     });
     expect(screen.queryByTestId('ambient-audio')).not.toBeInTheDocument();
   });
+
+  test('resumes the music after a playing video with sound is removed from the page (popup closed / navigated away)', () => {
+    vi.useFakeTimers();
+    const playSpy = vi.mocked(HTMLMediaElement.prototype.play);
+    const pauseSpy = vi.mocked(HTMLMediaElement.prototype.pause);
+
+    render(<AudioToggle inline playlist={['/uploads/1.mp3']} />);
+    const audio = screen.getByTestId('ambient-audio');
+    playSpy.mockClear();
+
+    // An unmuted video starts playing
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => false });
+    document.body.appendChild(video);
+    fireEvent.play(video);
+    expect(pauseSpy.mock.contexts).toContain(audio);
+
+    // Still playing after a while -> music stays paused
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(playSpy).not.toHaveBeenCalled();
+
+    // The video element disappears without any pause/ended event reaching the document
+    video.remove();
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(playSpy.mock.contexts).toContain(audio);
+  });
+
+  test('pauses for a video only while it is audible (mute / unmute)', () => {
+    const playSpy = vi.mocked(HTMLMediaElement.prototype.play);
+    const pauseSpy = vi.mocked(HTMLMediaElement.prototype.pause);
+
+    render(<AudioToggle inline playlist={['/uploads/1.mp3']} />);
+    const audio = screen.getByTestId('ambient-audio');
+
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => false });
+    video.muted = true;
+    document.body.appendChild(video);
+
+    // Muted autoplay preview does not interrupt the music
+    fireEvent.play(video);
+    expect(pauseSpy.mock.contexts).not.toContain(audio);
+
+    // Viewer unmutes -> music pauses; mutes again -> music resumes
+    video.muted = false;
+    fireEvent(video, new Event('volumechange'));
+    expect(pauseSpy.mock.contexts).toContain(audio);
+
+    playSpy.mockClear();
+    video.muted = true;
+    fireEvent(video, new Event('volumechange'));
+    expect(playSpy.mock.contexts).toContain(audio);
+
+    video.remove();
+  });
 });

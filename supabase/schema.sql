@@ -14,6 +14,8 @@ create table if not exists public.site_settings (
   music_url text not null default '/samples/gentle-memories.wav',
   music_playlist jsonb not null default '[]'::jsonb,
   music_enabled boolean not null default true,
+  site_title text not null default '',
+  favicon_url text not null default '',
   letter_title text not null,
   letter_body text not null,
   letter_signature text not null,
@@ -25,6 +27,10 @@ create table if not exists public.site_settings (
 -- Nâng cấp database cũ (tạo trước khi có danh sách nhạc nền nhiều bài):
 alter table public.site_settings
   add column if not exists music_playlist jsonb not null default '[]'::jsonb;
+alter table public.site_settings
+  add column if not exists site_title text not null default '';
+alter table public.site_settings
+  add column if not exists favicon_url text not null default '';
 
 -- 2. Bảng các mốc ảnh kỷ niệm (mỗi kỷ niệm là 1 album nhiều ảnh)
 create table if not exists public.memories (

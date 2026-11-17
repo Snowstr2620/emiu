@@ -15,6 +15,8 @@ import { DEFAULT_MUSIC_URL, normalizePlaylist } from '@/lib/music-playlist';
 const GESTURE_EVENTS = ['pointerdown', 'touchstart', 'keydown', 'click'] as const;
 /** Grace period so the music keeps going while one page swaps to the next. */
 const RELEASE_DELAY_MS = 1500;
+/** How often to re-check, while paused for a video, whether that video is gone. */
+const VIDEO_RESUME_CHECK_MS = 1000;
 
 function toPlayablePlaylist(playlist: string[] | undefined, musicUrl: string | undefined): string[] {
   const list = normalizePlaylist(playlist);
@@ -128,39 +130,72 @@ function AmbientAudioEngine({ playlist, onAutoStart }: AmbientAudioEngineProps) 
   }, [detachGestureListeners]);
 
   useEffect(() => {
-    function handleVideoPlay(event: Event) {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.tagName === 'VIDEO' &&
-        !(target as HTMLVideoElement).muted
-      ) {
-        pausedForVideoRef.current = true;
-        audioRef.current?.pause();
+    let watchTimer: ReturnType<typeof setInterval> | null = null;
+
+    function hasSound(v: HTMLVideoElement): boolean {
+      return !v.muted && v.volume > 0;
+    }
+
+    function isAudibleVideo(v: HTMLVideoElement): boolean {
+      return !v.paused && !v.ended && hasSound(v);
+    }
+
+    function hasAudibleVideo(): boolean {
+      return Array.from(document.querySelectorAll('video')).some(isAudibleVideo);
+    }
+
+    function stopWatching() {
+      if (watchTimer) {
+        clearInterval(watchTimer);
+        watchTimer = null;
       }
     }
 
-    function handleVideoStop(event: Event) {
-      const target = event.target;
-      if (!(target instanceof Element) || target.tagName !== 'VIDEO') return;
-      if (!pausedForVideoRef.current) return;
+    function resumeIfNoAudibleVideo() {
+      if (!pausedForVideoRef.current || hasAudibleVideo()) return;
+      pausedForVideoRef.current = false;
+      stopWatching();
+      attemptPlay();
+    }
 
-      const videos = Array.from(document.querySelectorAll('video'));
-      const hasOtherActiveVideo = videos.some(
-        (v) => v !== target && !v.paused && !v.ended && !v.muted
-      );
-      if (!hasOtherActiveVideo) {
-        pausedForVideoRef.current = false;
-        attemptPlay();
+    function pauseForVideo() {
+      pausedForVideoRef.current = true;
+      audioRef.current?.pause();
+      // A playing video that is removed from the page (popup closed, next photo, back to
+      // the timeline) stops without a `pause` event reaching the document, so keep
+      // checking until no audible video is left.
+      if (!watchTimer) {
+        watchTimer = setInterval(resumeIfNoAudibleVideo, VIDEO_RESUME_CHECK_MS);
+      }
+    }
+
+    function isVideoEvent(event: Event): event is Event & { target: HTMLVideoElement } {
+      return event.target instanceof Element && event.target.tagName === 'VIDEO';
+    }
+
+    function handleVideoPlay(event: Event) {
+      // A `play` event already means the video is starting, so only its sound matters here.
+      if (isVideoEvent(event) && hasSound(event.target)) pauseForVideo();
+    }
+
+    function handleVideoStop(event: Event) {
+      if (isVideoEvent(event)) resumeIfNoAudibleVideo();
+    }
+
+    function handleVolumeChange(event: Event) {
+      if (!isVideoEvent(event)) return;
+      if (isAudibleVideo(event.target)) {
+        pauseForVideo();
+      } else {
+        resumeIfNoAudibleVideo();
       }
     }
 
     function handleVisibilityChange() {
       if (document.visibilityState !== 'visible') return;
-      const videos = Array.from(document.querySelectorAll('video'));
-      const hasActiveVideo = videos.some((v) => !v.paused && !v.ended && !v.muted);
-      if (!hasActiveVideo) {
+      if (!hasAudibleVideo()) {
         pausedForVideoRef.current = false;
+        stopWatching();
         attemptPlay();
       }
     }
@@ -168,12 +203,17 @@ function AmbientAudioEngine({ playlist, onAutoStart }: AmbientAudioEngineProps) 
     document.addEventListener('play', handleVideoPlay, true);
     document.addEventListener('pause', handleVideoStop, true);
     document.addEventListener('ended', handleVideoStop, true);
+    document.addEventListener('emptied', handleVideoStop, true);
+    document.addEventListener('volumechange', handleVolumeChange, true);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      stopWatching();
       document.removeEventListener('play', handleVideoPlay, true);
       document.removeEventListener('pause', handleVideoStop, true);
       document.removeEventListener('ended', handleVideoStop, true);
+      document.removeEventListener('emptied', handleVideoStop, true);
+      document.removeEventListener('volumechange', handleVolumeChange, true);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [attemptPlay]);

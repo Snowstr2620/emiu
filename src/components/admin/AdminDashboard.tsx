@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Activity,
+  AppWindow,
   AlertTriangle,
   ArrowDown,
   ArrowUp,
@@ -56,6 +57,7 @@ import {
 } from '@/lib/admin-upload';
 import {
   CLIENT_AUDIO_RULE,
+  CLIENT_IMAGE_RULE,
   createManagedMultiDropHandlers,
   getDroppedOrPastedFiles,
   validateClientUploadFile,
@@ -69,6 +71,11 @@ import {
   getTrackDisplayName,
   MAX_MUSIC_TRACKS,
 } from '@/lib/music-playlist';
+import {
+  DEFAULT_FAVICON_URL,
+  DEFAULT_SITE_TITLE,
+  MAX_SITE_TITLE_LENGTH,
+} from '@/lib/site-branding';
 import {
   formatAlbumMediaCountVi,
   getMemoryImages,
@@ -137,6 +144,8 @@ interface SettingsFormState {
   heroSubtitle: string;
   loveStartDate: string;
   musicEnabled: boolean;
+  siteTitle: string;
+  faviconUrl: string;
   letterTitle: string;
   letterBody: string;
   letterSignature: string;
@@ -310,6 +319,8 @@ function toSettingsForm(settings: AdminSiteSettings): SettingsFormState {
     heroSubtitle: settings.heroSubtitle,
     loveStartDate: settings.loveStartDate,
     musicEnabled: settings.musicEnabled,
+    siteTitle: settings.siteTitle ?? '',
+    faviconUrl: settings.faviconUrl ?? '',
     letterTitle: settings.letterTitle,
     letterBody: settings.letterBody,
     letterSignature: settings.letterSignature,
@@ -472,6 +483,32 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
     toPlaylistDraft(initialData.settings)
   );
   const [newTrackUrl, setNewTrackUrl] = useState('');
+  const [pendingFavicon, setPendingFavicon] = useState<{ file: File; previewUrl: string } | null>(
+    null
+  );
+  const faviconInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pendingFavicon) URL.revokeObjectURL(pendingFavicon.previewUrl);
+    };
+  }, [pendingFavicon]);
+
+  function clearPendingFavicon() {
+    setPendingFavicon(null);
+    if (faviconInputRef.current) faviconInputRef.current.value = '';
+  }
+
+  function applyFaviconFile(file: File) {
+    const err = validateClientUploadFile(file, CLIENT_IMAGE_RULE);
+    if (err) {
+      showError(err);
+      if (faviconInputRef.current) faviconInputRef.current.value = '';
+      return;
+    }
+    setPendingFavicon({ file, previewUrl: URL.createObjectURL(file) });
+    setNotice(null);
+  }
   const playlistDraftRef = useRef(playlistDraft);
   playlistDraftRef.current = playlistDraft;
   const [isDraggingAudio, setIsDraggingAudio] = useState(false);
@@ -1136,9 +1173,9 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
     setSavingSettings(true);
     setNotice(null);
-    const newlyUploadedAudioUrls: string[] = [];
-    const cleanupNewAudio = async () => {
-      await Promise.all(newlyUploadedAudioUrls.map((url) => cleanupUploadedUrl(url)));
+    const newlyUploadedUrls: string[] = [];
+    const cleanupNewUploads = async () => {
+      await Promise.all(newlyUploadedUrls.map((url) => cleanupUploadedUrl(url)));
     };
 
     try {
@@ -1146,11 +1183,17 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       for (const item of playlistDraft) {
         if (item.file) {
           const uploadedUrl = await uploadMediaFile(item.file, 'audio');
-          newlyUploadedAudioUrls.push(uploadedUrl);
+          newlyUploadedUrls.push(uploadedUrl);
           finalPlaylist.push(uploadedUrl);
         } else if (item.url.trim()) {
           finalPlaylist.push(item.url.trim());
         }
+      }
+
+      let finalFaviconUrl = settingsForm.faviconUrl.trim();
+      if (pendingFavicon) {
+        finalFaviconUrl = await uploadMediaFile(pendingFavicon.file, 'image');
+        newlyUploadedUrls.push(finalFaviconUrl);
       }
 
       const res = await fetch('/api/admin/settings', {
@@ -1163,6 +1206,8 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
           musicUrl: finalPlaylist[0] || DEFAULT_MUSIC_URL,
           musicPlaylist: finalPlaylist,
           musicEnabled: true,
+          siteTitle: settingsForm.siteTitle.trim(),
+          faviconUrl: finalFaviconUrl,
           letterTitle: settingsForm.letterTitle,
           letterBody: settingsForm.letterBody,
           letterSignature: settingsForm.letterSignature,
@@ -1171,7 +1216,7 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       });
 
       if (res.status === 401) {
-        await cleanupNewAudio();
+        await cleanupNewUploads();
         handleUnauthorized();
         return;
       }
@@ -1182,16 +1227,17 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       };
 
       if (!res.ok || !payload.settings) {
-        await cleanupNewAudio();
+        await cleanupNewUploads();
         showError(payload.error || 'Không thể lưu cài đặt.');
         return;
       }
 
       setSettingsForm(toSettingsForm(payload.settings));
       replacePlaylistDraft(toPlaylistDraft(payload.settings));
+      clearPendingFavicon();
       showSuccess(successText);
     } catch (err) {
-      await cleanupNewAudio();
+      await cleanupNewUploads();
       if (err instanceof UploadAuthError) {
         handleUnauthorized();
         return;
@@ -1524,6 +1570,9 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
       ? coverDraftItem.previewUrl
       : coverDraftItem.url
     : memoryForm.imageUrl.trim();
+  const faviconPreview =
+    pendingFavicon?.previewUrl || settingsForm.faviconUrl.trim() || DEFAULT_FAVICON_URL;
+  const tabTitlePreview = settingsForm.siteTitle.trim() || DEFAULT_SITE_TITLE;
   const isActivePreviewVideo = coverDraftItem
     ? coverDraftItem.mediaType === 'video'
     : isVideoMediaUrl(memoryForm.imageUrl.trim());
@@ -2339,6 +2388,91 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
                 placeholder="Gửi em/anh — người luôn ở đây cùng tụi mình qua từng mùa thương nhớ."
                 className={ADMIN_INPUT_CLASS}
               />
+            </div>
+
+            {/* Browser tab title & icon */}
+            <div
+              data-testid="browser-tab-settings"
+              className="space-y-3 rounded-2xl border border-amber-300/80 bg-amber-50/75 p-3 sm:p-4"
+            >
+              <div className="flex items-center gap-2">
+                <AppWindow className="h-4 w-4 text-red-500" />
+                <span className="text-sm font-semibold text-stone-900">Tab trình duyệt</span>
+              </div>
+              <p className="text-xs text-stone-600">
+                Tiêu đề và biểu tượng hiện trên tab trình duyệt, trong dấu trang và khi lưu trang ra
+                màn hình chính điện thoại.
+              </p>
+
+              <div
+                data-testid="browser-tab-preview"
+                aria-label="Xem trước tab trình duyệt"
+                className="flex min-w-0 max-w-sm items-center gap-2 rounded-t-xl border border-b-0 border-stone-300 bg-stone-100 px-3 py-2"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={faviconPreview} alt="" className="h-4 w-4 shrink-0 rounded-sm object-cover" />
+                <span className="min-w-0 flex-1 truncate text-xs text-stone-800">{tabTitlePreview}</span>
+                <X aria-hidden="true" className="h-3 w-3 shrink-0 text-stone-400" />
+              </div>
+
+              <div className="min-w-0">
+                <label
+                  htmlFor="settings-site-title"
+                  className="mb-1.5 block text-sm font-medium text-stone-800"
+                >
+                  Tiêu đề tab
+                </label>
+                <input
+                  id="settings-site-title"
+                  type="text"
+                  maxLength={MAX_SITE_TITLE_LENGTH}
+                  value={settingsForm.siteTitle}
+                  onChange={(e) =>
+                    setSettingsForm((prev) => ({ ...prev, siteTitle: e.target.value }))
+                  }
+                  placeholder={DEFAULT_SITE_TITLE}
+                  className={ADMIN_INPUT_CLASS}
+                />
+                <p className="mt-1 text-[11px] text-stone-500">
+                  Để trống để dùng tiêu đề mặc định.
+                </p>
+              </div>
+
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={faviconPreview}
+                  alt="Biểu tượng tab hiện tại"
+                  className="h-10 w-10 shrink-0 rounded-xl border border-amber-300/80 bg-[#FFFDF5] object-cover p-1"
+                />
+                <label className="inline-flex min-h-[36px] min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-2xl border border-amber-300/80 bg-[#FFFDF5] px-3.5 py-2.5 text-xs font-semibold text-stone-800 transition focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/30 hover:border-amber-400 hover:bg-amber-100/75">
+                  <Upload className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 max-w-full truncate sm:max-w-[240px]">
+                    {pendingFavicon ? pendingFavicon.file.name : 'Tải ảnh biểu tượng (nên là ảnh vuông)'}
+                  </span>
+                  <input
+                    ref={faviconInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                    aria-label="Tải ảnh biểu tượng tab"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) applyFaviconFile(file);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearPendingFavicon();
+                    setSettingsForm((prev) => ({ ...prev, faviconUrl: '' }));
+                  }}
+                  className={`inline-flex min-h-[36px] items-center rounded-2xl px-3 py-2.5 text-xs font-medium ${ADMIN_SECONDARY_BTN_CLASS}`}
+                >
+                  Dùng trái tim mặc định
+                </button>
+              </div>
             </div>
 
             {/* Ambient music playlist block */}
