@@ -42,6 +42,7 @@ import {
   VISUAL_MEDIA_ACCEPT,
 } from '@/lib/client-dropzone';
 import { formatMemoryLongDateVi, getVietnamCalendarDateParts } from '@/lib/date-utils';
+import { convertHeicFiles, HEIC_CONVERT_ERROR_MESSAGE, isHeicFile } from '@/lib/heic';
 import { isVideoFile, isVideoMediaUrl } from '@/lib/memory-album';
 import { useModalFocusTrap } from '@/lib/useModalFocusTrap';
 import type { DiaryEntry, DiaryMood, SafeAppUser } from '@/types/memories';
@@ -319,6 +320,18 @@ export function DailyDiarySection({
   }
 
   function applyImageFile(file: File, openIfClosed = false): boolean {
+    if (isHeicFile(file)) {
+      setNotice({ type: 'success', text: 'Đang chuyển ảnh HEIC sang JPG...' });
+      void convertHeicFiles([file]).then(({ files }) => {
+        if (files[0]) {
+          applyImageFileRef.current(files[0], openIfClosed);
+        } else {
+          setNotice({ type: 'error', text: HEIC_CONVERT_ERROR_MESSAGE });
+        }
+      });
+      return true;
+    }
+
     const err = validateClientVisualMediaFile(file);
     if (err) {
       setNotice({ type: 'error', text: err });
@@ -347,6 +360,9 @@ export function DailyDiarySection({
     }
     return true;
   }
+
+  const applyImageFileRef = useRef(applyImageFile);
+  applyImageFileRef.current = applyImageFile;
 
   function handleFormPaste(e: ClipboardEvent<HTMLFormElement>) {
     const pasted = getDroppedOrPastedFile(e.clipboardData?.files, e.clipboardData?.items);

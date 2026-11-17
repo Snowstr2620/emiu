@@ -63,6 +63,7 @@ import {
   validateClientVisualMediaFile,
   VISUAL_MEDIA_ACCEPT,
 } from '@/lib/client-dropzone';
+import { convertHeicFiles, HEIC_CONVERT_ERROR_MESSAGE, isHeicFile } from '@/lib/heic';
 import {
   formatAlbumMediaCountVi,
   getMemoryImages,
@@ -556,6 +557,21 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
   function applyMemoryImageFiles(files: File[], openFormIfClosed = false): boolean {
     if (!files.length) return false;
 
+    if (files.some(isHeicFile)) {
+      setNotice({ type: 'success', text: 'Đang chuyển ảnh HEIC sang JPG...' });
+      void convertHeicFiles(files).then(({ files: converted, failed }) => {
+        const applied = converted.length > 0 && applyMemoryImageFilesRef.current(converted, openFormIfClosed);
+        if (failed > 0) {
+          showError(
+            applied
+              ? `Đã thêm ảnh, nhưng ${failed} ảnh HEIC không chuyển được sang JPG.`
+              : HEIC_CONVERT_ERROR_MESSAGE
+          );
+        }
+      });
+      return true;
+    }
+
     const validFiles: File[] = [];
     let firstError: string | null = null;
     for (const file of files) {
@@ -616,6 +632,9 @@ export function AdminDashboard({ initialData, storageStatus }: AdminDashboardPro
 
     return true;
   }
+
+  const applyMemoryImageFilesRef = useRef(applyMemoryImageFiles);
+  applyMemoryImageFilesRef.current = applyMemoryImageFiles;
 
   function handleAddUrlToAlbum() {
     const url = memoryForm.imageUrl.trim();

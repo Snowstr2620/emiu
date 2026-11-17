@@ -11,10 +11,10 @@ export interface ClientFileValidationRule {
 }
 
 export const VISUAL_MEDIA_ACCEPT =
-  'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-m4v,.mov,.m4v';
+  'image/jpeg,image/png,image/webp,image/gif,image/avif,image/heic,image/heif,.heic,.heif,video/mp4,video/webm,video/quicktime,video/x-m4v,.mov,.m4v';
 
 export const VISUAL_MEDIA_INVALID_TYPE_MESSAGE =
-  'Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF, AVIF) hoặc video (MP4, WebM, MOV, M4V).';
+  'Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF, AVIF, HEIC) hoặc video (MP4, WebM, MOV, M4V).';
 
 export const CLIENT_IMAGE_RULE: ClientFileValidationRule = {
   allowedExtensions: new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']),

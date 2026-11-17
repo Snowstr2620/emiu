@@ -12,6 +12,9 @@ import type {
   StorageStatus,
 } from '@/types/memories';
 
+const mockHeicTo = vi.fn(async () => new Blob([new Uint8Array([9, 9])], { type: 'image/jpeg' }));
+vi.mock('heic-to/next', () => ({ heicTo: mockHeicTo }));
+
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
 
@@ -1339,7 +1342,7 @@ describe('AdminDashboard 5-tab UI', () => {
     const invalidTxt = new File(['bad'], 'notes.txt', { type: 'text/plain' });
     fireEvent.drop(dropzone, { dataTransfer: { files: [invalidTxt] } });
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF, AVIF) hoặc video (MP4, WebM, MOV, M4V).'
+      'Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF, AVIF, HEIC) hoặc video (MP4, WebM, MOV, M4V).'
     );
     expect(screen.queryByRole('img', { name: /Xem trước ảnh/i })).not.toBeInTheDocument();
 
@@ -1361,6 +1364,41 @@ describe('AdminDashboard 5-tab UI', () => {
       '/api/admin/memories',
       expect.objectContaining({ method: 'POST' })
     );
+  });
+
+  test('converts dropped iPhone HEIC photos to JPEG before previewing in the album', async () => {
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock-preview'),
+      revokeObjectURL: vi.fn(),
+    });
+    mockHeicTo.mockClear();
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    const heic = new File([new Uint8Array([1, 2, 3])], 'IMG_0001.HEIC', { type: 'image/heic' });
+    fireEvent.drop(screen.getByTestId('memories-quick-dropzone'), {
+      dataTransfer: { files: [heic] },
+    });
+
+    expect(await screen.findByText('IMG_0001.jpg')).toBeInTheDocument();
+    expect(mockHeicTo).toHaveBeenCalledWith(
+      expect.objectContaining({ blob: heic, type: 'image/jpeg' })
+    );
+    expect(screen.queryByText('IMG_0001.HEIC')).not.toBeInTheDocument();
+  });
+
+  test('shows a friendly error when a HEIC photo cannot be converted', async () => {
+    mockHeicTo.mockRejectedValueOnce(new Error('bad heic'));
+
+    render(<AdminDashboard initialData={makeInitialData()} storageStatus={STORAGE_STATUS} />);
+
+    const heic = new File([new Uint8Array([1])], 'broken.heic', { type: '' });
+    fireEvent.drop(screen.getByTestId('memories-quick-dropzone'), {
+      dataTransfer: { files: [heic] },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Không thể chuyển ảnh HEIC sang JPG/);
   });
 
   test('Tab "Nhật ký mỗi ngày" in /admin supports creating with dropped photo, editing partner entry, updating tab count badge, 2-click delete, and 401 redirect', async () => {
